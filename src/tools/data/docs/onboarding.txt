@@ -1,0 +1,10 @@
+TITLE: Onboarding Guide
+
+This guide helps a new user start with the plop platform.
+
+Step 1: Create an account.
+Step 2: Verify the email address.
+Step 3: Sign in and open the dashboard.
+
+For help, use the search_docs tool with a short query. The doc set holds
+short articles about accounts, billing, and security.

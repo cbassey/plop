@@ -1,0 +1,9 @@
+TITLE: Billing Overview
+
+The plop platform bills each account once per month.
+
+The invoice shows the plan name, the seat count, and the total cost.
+A user can change the plan at any time. The change takes effect on the
+next invoice date.
+
+To read a specific invoice, use the get_record tool with the record id.

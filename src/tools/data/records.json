@@ -1,0 +1,31 @@
+{
+  "rec-1001": {
+    "id": "rec-1001",
+    "type": "invoice",
+    "account": "acme-co",
+    "plan": "team",
+    "seats": 12,
+    "total_usd": 240
+  },
+  "rec-1002": {
+    "id": "rec-1002",
+    "type": "invoice",
+    "account": "globex",
+    "plan": "solo",
+    "seats": 1,
+    "total_usd": 20
+  },
+  "rec-2001": {
+    "id": "rec-2001",
+    "type": "account",
+    "account": "acme-co",
+    "owner": "dana",
+    "status": "active"
+  },
+  "__malformed_json__": "This record id returns text that is not valid JSON, to test malformed tool responses.",
+  "__wrong_schema__": {
+    "unexpected": true,
+    "note": "This record has the wrong shape. It has no id or type field."
+  },
+  "__null_record__": null
+}
