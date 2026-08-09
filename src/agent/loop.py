@@ -12,6 +12,7 @@ Every step writes a trace event. The harness reads the trace to score the run.
 
 from __future__ import annotations
 
+import json
 from dataclasses import dataclass
 from typing import Any, Optional
 
@@ -19,8 +20,8 @@ from tools import ToolContext, registry
 
 from .backends import ModelBackend, ModelResponse
 from .config import AgentConfig
-from .dispatch import dispatch
-from .guards import iteration_cap, validate_input
+from .dispatch import DispatchResult, dispatch
+from .guards import iteration_cap, redact_output, validate_input
 
 
 @dataclass
@@ -73,6 +74,7 @@ def run_agent(
     messages: list[dict[str, Any]] = [{"role": "user", "content": prompt}]
     tool_calls_made: list[dict[str, Any]] = []
     cap = iteration_cap(config)
+    seen_calls: set[str] = set()
 
     final_text = ""
     stop_reason = "max_iterations"
@@ -104,7 +106,22 @@ def run_agent(
         tool_result_blocks: list[dict[str, Any]] = []
         for call in response.tool_calls:
             tracer.log("tool_call", turn=turn, name=call.name, input=call.input)
-            result = dispatch(call, tools, context, config)
+
+            # Loop breaker: when the iteration-limit defense is on, refuse a
+            # repeated identical call. This kills loop bait. The agent gets a
+            # clear message and must finalize.
+            sig = call.name + "|" + json.dumps(call.input, sort_keys=True)
+            if config.enforce_iteration_limit and sig in seen_calls:
+                result = DispatchResult(
+                    content="Blocked: repeated identical call. Stop and give a "
+                    "final answer.",
+                    is_error=True,
+                    blocked=True,
+                    trace={"tool": call.name, "input": call.input, "loop_break": True},
+                )
+            else:
+                seen_calls.add(sig)
+                result = dispatch(call, tools, context, config)
             tracer.log(
                 "tool_result",
                 turn=turn,
@@ -136,7 +153,12 @@ def run_agent(
         # The loop ran out of turns.
         tracer.log("final", stop_reason="max_iterations", iterations=iterations)
 
+    # Output guard: never let the final answer contain the system prompt.
     if stop_reason == "end_turn":
+        guard = redact_output(final_text, config, config.system_prompt)
+        if guard.reason == "redacted":
+            tracer.log("guard", stage="redact_output", allowed=True, reason="redacted")
+        final_text = guard.value
         tracer.log("final", stop_reason="end_turn", iterations=iterations, text=final_text)
 
     return AgentRun(

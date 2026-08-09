@@ -4,8 +4,8 @@ The AgentConfig holds the defense flags. A "naive" agent turns every defense
 off. A "defended" agent turns them on. The before/after study compares the
 two.
 
-The scaffold defines the flags and the hook points. The real defense logic is
-the interesting part to build later. The scaffold marks each hook clearly.
+All five defenses are implemented in guards.py, dispatch.py, and loop.py. Each
+flag maps to one attack class in the adversarial suite.
 """
 
 from __future__ import annotations

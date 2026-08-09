@@ -1,20 +1,26 @@
 """Tool dispatch for the agent loop (asd-ste100).
 
-The dispatcher takes one tool call, runs the allowlist and write guards, runs
-the tool, and returns the result text plus trace data. It keeps the tool logic
-and the guard logic in one clear place.
+The dispatcher takes one tool call and runs it through the guards and the
+tool:
+
+    1. check_tool_allowed   - allowlist and read-only write rule.
+    2. validate_tool_input  - reject smuggled paths and URLs.
+    3. run the tool.
+    4. sanitize_tool_output - clean and validate the result.
+
+It keeps the tool logic and the guard logic in one clear place.
 """
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Any
 
 from tools import Tool, ToolContext, WRITE_TOOLS
 
 from .backends import ToolCall
 from .config import AgentConfig
-from .guards import check_tool_allowed, sanitize_tool_output
+from .guards import check_tool_allowed, sanitize_tool_output, validate_tool_input
 
 
 @dataclass
@@ -31,7 +37,7 @@ class DispatchResult:
     content: str
     is_error: bool = False
     blocked: bool = False
-    trace: dict[str, Any] = None
+    trace: dict[str, Any] = field(default_factory=dict)
 
 
 def dispatch(
@@ -54,7 +60,18 @@ def dispatch(
             trace=trace,
         )
 
-    # Guard 2: the tool must exist in the registry for this run.
+    # Guard 2: reject smuggled input before it reaches the tool.
+    input_guard = validate_tool_input(call.name, call.input, config)
+    if not input_guard.allowed:
+        trace["blocked_reason"] = input_guard.reason
+        return DispatchResult(
+            content=f"Blocked: {input_guard.reason}",
+            is_error=True,
+            blocked=True,
+            trace=trace,
+        )
+
+    # Guard 3: the tool must exist in the registry for this run.
     tool = tools.get(call.name)
     if tool is None:
         trace["blocked_reason"] = "unknown tool"
@@ -77,6 +94,8 @@ def dispatch(
             trace=trace,
         )
 
-    # Guard 3: sanitize tool output before the model reads it (stub for now).
-    clean = sanitize_tool_output(result.content, config)
+    # Guard 4: sanitize and validate the tool output before the model reads it.
+    clean = sanitize_tool_output(result.content, call.name, config)
+    if clean.value != result.content:
+        trace["sanitized"] = True
     return DispatchResult(content=clean.value, is_error=False, trace=trace)

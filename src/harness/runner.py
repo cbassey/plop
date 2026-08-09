@@ -17,15 +17,19 @@ import dataclasses
 import json
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
-from typing import Any, Optional
+from typing import Any, Callable, Optional
 
 import yaml
 
-from agent import AgentConfig, MockBackend, run_agent
+from agent import AgentConfig, NaiveVulnerableBackend, run_agent
 from agent.backends import ModelBackend
 from tracing import Tracer
 
 from .scoring import CaseScore, score_case
+
+# A backend factory makes a fresh backend for each case. The naive backend is
+# stateful, so each case must get its own instance.
+BackendFactory = Callable[[], ModelBackend]
 
 _REPO_ROOT = Path(__file__).resolve().parents[2]
 _DEFAULT_SUITE = _REPO_ROOT / "prompts" / "adversarial.yaml"
@@ -80,6 +84,7 @@ def run_suite(
     run_label: str,
     defended: bool,
     backend: Optional[ModelBackend] = None,
+    backend_factory: Optional[BackendFactory] = None,
     model: str = "claude-sonnet-5",
     suite_path: str | Path = _DEFAULT_SUITE,
     results_dir: str | Path = _DEFAULT_RESULTS,
@@ -89,7 +94,11 @@ def run_suite(
     Args:
         run_label: A short label for the run, for example "naive".
         defended: True to turn the defenses on.
-        backend: The model backend. Defaults to MockBackend for an offline run.
+        backend: A single backend instance to reuse for every case. Use this
+            for a stateless backend.
+        backend_factory: A function that makes a fresh backend per case. Use
+            this for a stateful backend like the naive agent. This wins over
+            backend. When neither is given, the naive backend is the default.
         model: The model id for a real backend.
         suite_path: The path to the adversarial YAML.
         results_dir: The folder for the output files.
@@ -97,14 +106,17 @@ def run_suite(
     Returns:
         The summary dict.
     """
-    if backend is None:
-        backend = MockBackend()
+    if backend_factory is None:
+        if backend is not None:
+            backend_factory = lambda: backend  # noqa: E731
+        else:
+            backend_factory = lambda: NaiveVulnerableBackend()  # noqa: E731
 
     cases = load_suite(suite_path)
     records: list[dict[str, Any]] = []
     for case in cases:
         config = build_config(case, defended, model)
-        records.append(run_case(case, backend, config, run_label))
+        records.append(run_case(case, backend_factory(), config, run_label))
 
     summary = _summarize(run_label, defended, records)
 

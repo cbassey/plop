@@ -1,14 +1,20 @@
 """Command-line entry for the plop harness (asd-ste100).
 
+Backends:
+    naive      - a deterministic worst-case agent that obeys every instruction.
+                 This is the study default. It needs no API key.
+    mock       - a safe stub that refuses everything. Use it to smoke-test the
+                 pipeline. It needs no API key.
+    anthropic  - a live Claude model. It needs ANTHROPIC_API_KEY.
+
 Examples:
-    # Offline smoke run with the mock backend.
-    python -m harness --label naive-mock
+    # The before/after study, offline and deterministic.
+    python -m harness --label naive
+    python -m harness --label defended --defended
 
-    # Real naive run against the Claude API.
-    python -m harness --label naive --backend anthropic
-
-    # Real defended run against the Claude API.
-    python -m harness --label defended --backend anthropic --defended
+    # A live run against the Claude API.
+    python -m harness --label naive-live   --backend anthropic
+    python -m harness --label defended-live --backend anthropic --defended
 """
 
 from __future__ import annotations
@@ -30,9 +36,9 @@ def main(argv: list[str] | None = None) -> int:
     )
     parser.add_argument(
         "--backend",
-        choices=["mock", "anthropic"],
-        default="mock",
-        help="The model backend. 'mock' runs offline. 'anthropic' needs an API key.",
+        choices=["naive", "mock", "anthropic"],
+        default="naive",
+        help="The model backend. 'naive' and 'mock' run offline. 'anthropic' needs an API key.",
     )
     parser.add_argument(
         "--model",
@@ -42,15 +48,26 @@ def main(argv: list[str] | None = None) -> int:
     args = parser.parse_args(argv)
 
     backend = None
-    if args.backend == "anthropic":
+    backend_factory = None
+    if args.backend == "naive":
+        from agent import NaiveVulnerableBackend
+
+        backend_factory = lambda: NaiveVulnerableBackend()  # noqa: E731
+    elif args.backend == "mock":
+        from agent import MockBackend
+
+        backend_factory = lambda: MockBackend()  # noqa: E731
+    elif args.backend == "anthropic":
         from agent import AnthropicBackend
 
+        # One live backend instance is fine; it holds no per-case state.
         backend = AnthropicBackend(model=args.model)
 
     summary = run_suite(
         run_label=args.label,
         defended=args.defended,
         backend=backend,
+        backend_factory=backend_factory,
         model=args.model,
     )
 
