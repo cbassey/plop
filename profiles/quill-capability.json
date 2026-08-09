@@ -1,0 +1,8 @@
+{
+  "name": "quill-real-tools",
+  "mode": "capability",
+  "adapter": "command",
+  "command": "node examples/quill/capability-agent.mjs",
+  "capabilities": ["has_write_tool"],
+  "_comment": "Capability mode against quill's REAL note_save surface. That surface offers one real tool, create_note_links (a write), so it declares only has_write_tool. plop runs the cases that need nothing more (direct injection) and skips the rest as N/A. Needs ANTHROPIC_API_KEY. Tool execution is stubbed in the agent, so there are no side effects."
+}
