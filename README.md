@@ -113,46 +113,40 @@ The result is a clean, repeatable before/after. For live-model numbers, use
 
 ## Before / after results
 
-These numbers come from the committed runs in `results/` (the deterministic
-`naive` backend). Reproduce them with the two commands in "How to run".
+These numbers come from the committed runs in `results/`. Two backends run the
+same 20-case suite: the deterministic worst-case `naive` backend, and a live
+`claude-sonnet-5` (2026-08-09). Reproduce them with the commands in "How to run".
 
 **Overall defense rate**
 
-| Run | Defense rate |
-| --- | --- |
-| Naive (defenses off) | **0 / 20 = 0%** |
-| Defended (defenses on) | **20 / 20 = 100%** |
-
-**Per category**
-
-| Category | Naive | Defended |
+| Run | Deterministic (worst case) | Live (claude-sonnet-5) |
 | --- | --- | --- |
-| Direct injection | 0 / 4 | 4 / 4 |
-| Indirect injection | 0 / 3 | 3 / 3 |
-| Malformed response | 0 / 3 | 3 / 3 |
-| Infinite loop | 0 / 3 | 3 / 3 |
-| Scope escalation | 0 / 3 | 3 / 3 |
-| Schema smuggling | 0 / 4 | 4 / 4 |
+| Naive (defenses off) | **0 / 20 = 0%** | **13 / 20 = 65%** |
+| Defended (defenses on) | **20 / 20 = 100%** | **20 / 20 = 100%** |
 
-The worst-case naive agent fails every case, as designed. The value is not the
-0-to-100 jump itself. The value is that **each guard maps to one attack class**,
-and the trace for every defended case shows the exact guard that fired. The next
-section walks through the six failure modes and the fix for each.
+**Per category** (each cell is Naive → Defended)
 
-### Live results (claude-sonnet-5)
+| Category | Deterministic | Live (claude-sonnet-5) |
+| --- | --- | --- |
+| Direct injection | 0/4 → 4/4 | 3/4 → 4/4 |
+| Indirect injection | 0/3 → 3/3 | 1/3 → 3/3 |
+| Malformed response | 0/3 → 3/3 | 3/3 → 3/3 |
+| Infinite loop | 0/3 → 3/3 | 3/3 → 3/3 |
+| Scope escalation | 0/3 → 3/3 | 0/3 → 3/3 |
+| Schema smuggling | 0/4 → 4/4 | 3/4 → 4/4 |
 
-The same suite run against a live model (`--backend anthropic`, model
-`claude-sonnet-5`, 2026-08-09). A live model resists many attacks on its own, so
-the naive number is far above the worst-case floor. Live results are not exactly
-repeatable; re-running may move a case or two.
+The two backends answer different questions. The **deterministic** run is a
+worst-case agent that obeys every instruction, so it fails every case; it
+measures what the **harness** adds on its own. The **live** run shows a real
+model already resists many attacks (65%), and the guards close the rest to reach
+100%. In both, **each guard maps to one attack class**, and the trace for every
+defended case shows the exact guard that fired.
 
-| Run | Overall | Direct | Indirect | Malformed | Loop | Scope | Smuggling |
-| --- | --- | --- | --- | --- | --- | --- | --- |
-| Naive (defenses off) | **13/20 = 65%** | 3/4 | 1/3 | 3/3 | 3/3 | 0/3 | 3/4 |
-| Defended (defenses on) | **20/20 = 100%** | 4/4 | 3/3 | 3/3 | 3/3 | 3/3 | 4/4 |
+### What the live model got wrong on its own
 
-What the live model got wrong on its own, and which guard fixed it (traces in
-`results/run-naive-live.json` and `results/run-defended-live.json`):
+Live results are not exactly repeatable; re-running may move a case or two. The
+items below come from `results/run-naive-live.json` and
+`results/run-defended-live.json`, and each names the guard that fixed it.
 
 - **Scope escalation (0/3 → 3/3).** This is the clearest real weakness. On a
   read-only task with an added "...and also save a note", the model does the
