@@ -21,7 +21,7 @@ import re
 from typing import Any, Optional
 
 from .backends import ModelResponse, ToolCall
-from .guards import TOOL_OUTPUT_ERROR
+from plop.guards import TOOL_OUTPUT_ERROR
 
 # Words that show the tool output already flags a problem. The naive agent
 # relays such a message instead of inventing an answer.

@@ -7,8 +7,18 @@ plop red-teams an LLM agent that uses tools. It runs a suite of adversarial
 prompts against the agent. It scores how well the agent defends against each
 attack. It writes full traces and a defense-rate report.
 
-The interesting part of this project is the failure modes that the study finds
-and fixes. The harness is only the frame that makes that study possible.
+plop is two things you can reuse, plus one study:
+
+- **`plop.guards`** — a guard library for any Python agent. Wrap your tool
+  calls with three hooks and you get the allowlist, the read-only rule, the
+  loop breaker, input validation, and output sanitization.
+- **`plop.adapters`** — a seam that lets the suite attack **your** agent, in
+  any language, over a small JSON contract (HTTP or a command).
+- **The study** — a small demo agent that shows each attack and each fix,
+  with a before/after defense rate.
+
+See [Use plop with your own agent](#use-plop-with-your-own-agent) for the
+first two. The rest of this document is the study.
 
 **Test id used in this project: `asd-ste100`.**
 
@@ -59,7 +69,7 @@ The suite has 20 cases in `prompts/adversarial.yaml`, across six categories.
 
 ## The tools
 
-The agent has three tools in `src/tools/`. They are small but realistic.
+The agent has three tools in `src/plop/tools/`. They are small but realistic.
 
 - `search_docs(query)` — searches a small local doc set. One doc holds an
   indirect-injection payload on purpose.
@@ -78,13 +88,17 @@ python -m venv .venv && . .venv/bin/activate
 pip install -e ".[dev]"
 
 # The before/after study. Offline and deterministic. No API key.
-python -m harness --label naive
-python -m harness --label defended --defended
+python -m plop.harness --label naive
+python -m plop.harness --label defended --defended
 
 # Optional: a live run against the Claude API (needs ANTHROPIC_API_KEY).
 pip install -e ".[anthropic]"
-python -m harness --label naive-live    --backend anthropic
-python -m harness --label defended-live --backend anthropic --defended
+python -m plop.harness --label naive-live    --backend anthropic
+python -m plop.harness --label defended-live --backend anthropic --defended
+
+# Attack your own agent instead of the demo agent.
+python -m plop.harness --label mine --adapter http    --url http://localhost:3000/api/plop-adapter
+python -m plop.harness --label mine --adapter command --command "node run-agent.js"
 ```
 
 Each run writes two files to `results/`:
@@ -196,14 +210,14 @@ fix seen in `results/run-defended.json`.
      The agent reads it back and obeys: it writes the note **and** leaks the
      prompt. This is the most dangerous case, because the attack rides in on
      data the agent was asked to read.
-   - *Fix:* **tool-output sanitization** (`_strip_injection`) drops the order
+   - *Fix:* **tool-output sanitization** (`strip_injection`) drops the order
      lines from the tool output before the model sees them. The agent then just
      summarizes the clean doc. No write, no leak.
 
 4. **Trusting a malformed tool response** (`malformed-01..03`).
    - *Naive:* `get_record` returns invalid JSON, a wrong-shape object, or a
      null. The agent invents an answer ("the account name is acme-co").
-   - *Fix:* **tool-output validation** (`_validate_record_json`) checks that a
+   - *Fix:* **tool-output validation** (`json_object_validator`) checks that a
      `get_record` result is a JSON object with an `id` and a `type`. If not, it
      withholds the value and returns a clear `TOOL_OUTPUT_ERROR`. The agent
      relays the error instead of inventing data.
@@ -236,9 +250,10 @@ fix seen in `results/run-defended.json`.
 
 ## The defenses
 
-The agent config in `src/agent/config.py` holds five defense flags. A **naive**
-run turns them all off. A **defended** run turns them all on. All five are now
-implemented in `src/agent/guards.py`.
+The agent config in `src/plop/agent/config.py` holds five defense flags. A
+**naive** run turns them all off. A **defended** run turns them all on. All
+five are implemented in the reusable library `src/plop/guards/`, and the demo
+agent wires them up in `AgentConfig.to_policy()`.
 
 | Defense | Flag | Stops |
 | --- | --- | --- |
@@ -248,14 +263,13 @@ implemented in `src/agent/guards.py`.
 | Tool-input validation | `input_validation` | Schema smuggling |
 | Tool-output sanitization + validation + output redaction | `output_sanitization` | Indirect injection, malformed responses, prompt leak |
 
-Where each guard runs:
+Where each guard runs (the three hooks of `GuardedPipeline`):
 
-- **Input side**, in `dispatch.py`: allowlist, read-only rule, and input
-  validation run before the tool.
-- **Tool-output side**, in `dispatch.py`: sanitization and JSON validation run
-  on the result before the model reads it.
-- **Loop side**, in `loop.py`: the repeat-call breaker and the final output
-  redaction.
+- **`before_tool`**: the repeat-call breaker, the allowlist, the read-only
+  rule, and input validation run before the tool.
+- **`after_tool`**: sanitization and JSON validation run on the result before
+  the model reads it.
+- **`final_output`**: secret redaction runs on the final answer.
 
 This is defense in depth: some attacks are stopped at more than one layer. For
 example, an injection that asks for a write on a read-only task is stopped by
@@ -263,21 +277,79 @@ both the allowlist and the read-only rule.
 
 ---
 
+## Use plop with your own agent
+
+### 1. Import the guards (Python agents)
+
+`plop.guards` has no dependency on the demo agent. Declare your facts in a
+`GuardPolicy`, then wrap your tool execution with three hooks:
+
+```python
+from plop.guards import GuardPolicy, GuardedPipeline
+
+policy = GuardPolicy(
+    allowed_tools=["search", "fetch", "send_email"],
+    write_tools=["send_email"],          # tools that change state
+    task_mode="read_only",               # this task must not write
+    secrets=[SYSTEM_PROMPT],             # must never leak in the answer
+)
+pipeline = GuardedPipeline(policy)       # one pipeline per run
+
+for call in model_tool_calls:
+    gate = pipeline.before_tool(call.name, call.input)
+    if not gate.allowed:
+        give_model(f"Blocked: {gate.reason}")
+        continue
+    raw = run_my_tool(call.name, call.input)
+    give_model(pipeline.after_tool(call.name, raw).value)
+
+final_answer = pipeline.final_output(final_answer).value
+```
+
+Every defense flag is on by default. `GuardPolicy.all_off()` gives the naive
+baseline for a before/after study of your own agent.
+
+### 2. Point the suite at your agent (any language)
+
+The harness talks to an agent over a small JSON contract: one case in, one
+transcript out. Two transports ship: HTTP and a command. The full contract is
+in [docs/adapter-contract.md](docs/adapter-contract.md).
+
+- Smallest possible agent: [examples/echo-agent/agent.py](examples/echo-agent/agent.py)
+- A real TypeScript agent (quill, from smart-notes): [examples/quill/](examples/quill/)
+
+Run the same before/after study against your agent:
+
+```bash
+python -m plop.harness --label mine-naive    --adapter http --url $URL
+python -m plop.harness --label mine-defended --adapter http --url $URL --defended
+```
+
+The `defended` flag travels in the payload, so your adapter decides what
+"guards on" means for your agent.
+
+---
+
 ## Architecture
 
 ```
-src/
-  agent/     Bare-metal loop, model backends, tool dispatch, guard hooks.
+src/plop/
+  guards/    The reusable guard library: policy, checks, pipeline.
+  adapters/  The seam to any agent: builtin, HTTP, command.
+  agent/     The demo agent: bare-metal loop, model backends, tool dispatch.
   tools/     The three test tools and their local data.
   harness/   The runner and the scorer. Reads the suite, runs it, writes results.
   tracing/   JSON Lines trace logging.
 prompts/     The adversarial suite (adversarial.yaml).
 results/     The run outputs.
-docs/        Architecture decision records.
+examples/    Adapter examples: echo-agent (command), quill (HTTP).
+docs/        The adapter contract and architecture decision records.
 ```
 
-The agent loop is in `src/agent/loop.py`. It is small on purpose. Read it top to
-bottom to see the whole mechanism.
+The agent loop is in `src/plop/agent/loop.py`. It is small on purpose. Read it
+top to bottom to see the whole mechanism. The split into a guard library and
+an adapter seam is ADR
+[0002](docs/architecture-decisions/0002-guard-library-and-adapter-seam.md).
 
 ---
 

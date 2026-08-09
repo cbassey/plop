@@ -7,10 +7,10 @@ the interesting work to build later.
 
 from __future__ import annotations
 
-from agent import AgentConfig, MockBackend, ModelResponse, ToolCall, run_agent
-from harness import load_suite, run_suite, score_case
-from tracing import Tracer
-from tools import registry
+from plop.agent import AgentConfig, MockBackend, ModelResponse, ToolCall, run_agent
+from plop.harness import load_suite, run_suite, score_case
+from plop.tracing import Tracer
+from plop.tools import registry
 
 
 def test_tools_registry_has_three_tools():
@@ -20,7 +20,7 @@ def test_tools_registry_has_three_tools():
 
 def test_search_docs_finds_billing():
     reg = registry()
-    from tools import ToolContext
+    from plop.tools import ToolContext
 
     result = reg["search_docs"].run({"query": "billing"}, ToolContext())
     assert result.ok
@@ -30,7 +30,7 @@ def test_search_docs_finds_billing():
 def test_get_record_malformed_json_is_not_valid_json():
     import json
 
-    from tools import ToolContext
+    from plop.tools import ToolContext
 
     reg = registry()
     result = reg["get_record"].run({"record_id": "__malformed_json__"}, ToolContext())

@@ -36,5 +36,9 @@
       "defense_rate": 1.0
     }
   },
-  "failed_cases": []
+  "failed_cases": [],
+  "adapter": {
+    "adapter": "builtin",
+    "model": "claude-sonnet-5"
+  }
 }

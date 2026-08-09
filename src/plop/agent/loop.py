@@ -4,24 +4,25 @@ This loop is on purpose small and visible. It does not use an agent framework.
 The steps are:
 
     1. Send the system prompt, the messages, and the tool specs to the model.
-    2. If the model asks for tools, run each tool and add the results.
+    2. If the model asks for tools, run each tool through the guard pipeline
+       and add the results.
     3. Repeat until the model gives a final answer or the loop hits the cap.
 
-Every step writes a trace event. The harness reads the trace to score the run.
+The guards come from plop.guards, wired up by AgentConfig.to_policy. Every
+step writes a trace event. The harness reads the trace to score the run.
 """
 
 from __future__ import annotations
 
-import json
 from dataclasses import dataclass
-from typing import Any, Optional
+from typing import Any
 
-from tools import ToolContext, registry
+from plop.guards import GuardedPipeline
+from plop.tools import WRITE_TOOLS, ToolContext, registry
 
 from .backends import ModelBackend, ModelResponse
 from .config import AgentConfig
-from .dispatch import DispatchResult, dispatch
-from .guards import iteration_cap, redact_output, validate_input
+from .dispatch import dispatch
 
 
 @dataclass
@@ -55,26 +56,13 @@ def run_agent(
     tools = registry(config.allowed_tools)
     tool_specs = [t.spec() for t in tools.values()]
     context = ToolContext(task_mode=config.task_mode)
+    pipeline = GuardedPipeline(config.to_policy(WRITE_TOOLS))
 
     tracer.log("user_prompt", prompt=prompt, task_mode=config.task_mode)
 
-    # Guard: validate the user input (stub for now).
-    checked = validate_input(prompt, config)
-    if not checked.allowed:
-        tracer.log("guard", stage="input_validation", allowed=False, reason=checked.reason)
-        return AgentRun(
-            final_text=f"Blocked: {checked.reason}",
-            stop_reason="blocked_input",
-            iterations=0,
-            tool_calls=[],
-            writes=[],
-            events=tracer.as_dicts(),
-        )
-
     messages: list[dict[str, Any]] = [{"role": "user", "content": prompt}]
     tool_calls_made: list[dict[str, Any]] = []
-    cap = iteration_cap(config)
-    seen_calls: set[str] = set()
+    cap = pipeline.iteration_cap
 
     final_text = ""
     stop_reason = "max_iterations"
@@ -102,26 +90,12 @@ def run_agent(
         # Keep the assistant turn in the history.
         messages.append(_assistant_message(response))
 
-        # Run each tool call and collect the tool results.
+        # Run each tool call through the guard pipeline and the tool.
         tool_result_blocks: list[dict[str, Any]] = []
         for call in response.tool_calls:
             tracer.log("tool_call", turn=turn, name=call.name, input=call.input)
 
-            # Loop breaker: when the iteration-limit defense is on, refuse a
-            # repeated identical call. This kills loop bait. The agent gets a
-            # clear message and must finalize.
-            sig = call.name + "|" + json.dumps(call.input, sort_keys=True)
-            if config.enforce_iteration_limit and sig in seen_calls:
-                result = DispatchResult(
-                    content="Blocked: repeated identical call. Stop and give a "
-                    "final answer.",
-                    is_error=True,
-                    blocked=True,
-                    trace={"tool": call.name, "input": call.input, "loop_break": True},
-                )
-            else:
-                seen_calls.add(sig)
-                result = dispatch(call, tools, context, config)
+            result = dispatch(call, tools, context, pipeline)
             tracer.log(
                 "tool_result",
                 turn=turn,
@@ -155,7 +129,7 @@ def run_agent(
 
     # Output guard: never let the final answer contain the system prompt.
     if stop_reason == "end_turn":
-        guard = redact_output(final_text, config, config.system_prompt)
+        guard = pipeline.final_output(final_text)
         if guard.reason == "redacted":
             tracer.log("guard", stage="redact_output", allowed=True, reason="redacted")
         final_text = guard.value

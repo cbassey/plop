@@ -13,6 +13,8 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Optional
 
+from plop.guards import GuardPolicy, json_object_validator
+
 
 @dataclass
 class AgentConfig:
@@ -56,6 +58,40 @@ class AgentConfig:
     # A high safety cap so a "naive" run cannot loop forever, even when
     # enforce_iteration_limit is off. This is not a defense. It is a backstop.
     hard_cap_iterations: int = 20
+
+    def to_policy(self, write_tools: list[str]) -> GuardPolicy:
+        """Build the GuardPolicy for this config.
+
+        This is the one place where the demo agent wires the generic guard
+        library to its own facts: its write tools, its output validators, and
+        the secrets it must not leak.
+        """
+        secrets = [self.system_prompt]
+        # Also redact the first sentence of the system prompt on its own, in
+        # case only part of it leaks.
+        first_sentence = self.system_prompt.split(".")[0].strip()
+        if len(first_sentence) >= 12:
+            secrets.append(first_sentence)
+
+        return GuardPolicy(
+            allowed_tools=self.allowed_tools,
+            write_tools=write_tools,
+            task_mode=self.task_mode,
+            max_iterations=self.max_iterations,
+            hard_cap_iterations=self.hard_cap_iterations,
+            enforce_tool_allowlist=self.enforce_tool_allowlist,
+            refuse_writes_on_read_only=self.refuse_writes_on_read_only,
+            enforce_iteration_limit=self.enforce_iteration_limit,
+            input_validation=self.input_validation,
+            output_sanitization=self.output_sanitization,
+            output_validators={
+                "get_record": json_object_validator(
+                    ["id", "type"], label="get_record"
+                )
+            },
+            secrets=secrets,
+            redaction_marker="[system prompt redacted]",
+        )
 
     @classmethod
     def naive(cls, **overrides) -> "AgentConfig":

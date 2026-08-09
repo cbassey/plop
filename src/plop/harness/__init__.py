@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from .runner import build_config, load_suite, run_case, run_suite
+from .runner import build_config, load_suite, run_case, run_suite  # noqa: F401
 from .scoring import CaseScore, CheckResult, score_case
 
 __all__ = [

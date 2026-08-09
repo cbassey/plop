@@ -1,14 +1,15 @@
 """Tool dispatch for the agent loop (asd-ste100).
 
-The dispatcher takes one tool call and runs it through the guards and the
-tool:
+The dispatcher takes one tool call and runs it through the guard pipeline and
+the tool:
 
-    1. check_tool_allowed   - allowlist and read-only write rule.
-    2. validate_tool_input  - reject smuggled paths and URLs.
-    3. run the tool.
-    4. sanitize_tool_output - clean and validate the result.
+    1. pipeline.before_tool - repeat-call breaker, allowlist, read-only rule,
+                              and input validation.
+    2. run the tool.
+    3. pipeline.after_tool  - sanitize and validate the result.
 
-It keeps the tool logic and the guard logic in one clear place.
+The guards themselves live in plop.guards. That package is a library with no
+dependency on this demo agent, so any other agent can use the same pipeline.
 """
 
 from __future__ import annotations
@@ -16,11 +17,10 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Any
 
-from tools import Tool, ToolContext, WRITE_TOOLS
+from plop.guards import GuardedPipeline
+from plop.tools import Tool, ToolContext
 
 from .backends import ToolCall
-from .config import AgentConfig
-from .guards import check_tool_allowed, sanitize_tool_output, validate_tool_input
 
 
 @dataclass
@@ -44,34 +44,25 @@ def dispatch(
     call: ToolCall,
     tools: dict[str, Tool],
     context: ToolContext,
-    config: AgentConfig,
+    pipeline: GuardedPipeline,
 ) -> DispatchResult:
-    """Run one tool call through the guards and the tool."""
+    """Run one tool call through the guard pipeline and the tool."""
     trace: dict[str, Any] = {"tool": call.name, "input": call.input}
 
-    # Guard 1: allowlist and read-only write rule.
-    guard = check_tool_allowed(call.name, config, WRITE_TOOLS)
-    if not guard.allowed:
-        trace["blocked_reason"] = guard.reason
+    # Input-side guards: breaker, allowlist, read-only rule, input validation.
+    gate = pipeline.before_tool(call.name, call.input)
+    if not gate.allowed:
+        trace["blocked_reason"] = gate.reason
+        if gate.stage == "loop_break":
+            trace["loop_break"] = True
         return DispatchResult(
-            content=f"Blocked: {guard.reason}",
+            content=f"Blocked: {gate.reason}",
             is_error=True,
             blocked=True,
             trace=trace,
         )
 
-    # Guard 2: reject smuggled input before it reaches the tool.
-    input_guard = validate_tool_input(call.name, call.input, config)
-    if not input_guard.allowed:
-        trace["blocked_reason"] = input_guard.reason
-        return DispatchResult(
-            content=f"Blocked: {input_guard.reason}",
-            is_error=True,
-            blocked=True,
-            trace=trace,
-        )
-
-    # Guard 3: the tool must exist in the registry for this run.
+    # The tool must exist in the registry for this run.
     tool = tools.get(call.name)
     if tool is None:
         trace["blocked_reason"] = "unknown tool"
@@ -94,8 +85,8 @@ def dispatch(
             trace=trace,
         )
 
-    # Guard 4: sanitize and validate the tool output before the model reads it.
-    clean = sanitize_tool_output(result.content, call.name, config)
+    # Output-side guard: sanitize and validate before the model reads it.
+    clean = pipeline.after_tool(call.name, result.content)
     if clean.value != result.content:
         trace["sanitized"] = True
     return DispatchResult(content=clean.value, is_error=False, trace=trace)

@@ -2,8 +2,10 @@
 
 The runner:
     1. Loads the adversarial suite from prompts/adversarial.yaml.
-    2. Runs each case against the agent.
-    3. Scores each case.
+    2. Runs each case through an adapter. The adapter connects the harness to
+       the agent under test — the built-in demo agent, or any external agent
+       over HTTP or a command (see plop.adapters).
+    3. Scores each transcript.
     4. Writes a per-run JSON file with full traces.
     5. Writes a summary report with the defense rate overall and per category.
 
@@ -15,23 +17,18 @@ from __future__ import annotations
 
 import dataclasses
 import json
-from dataclasses import asdict, dataclass, field
 from pathlib import Path
-from typing import Any, Callable, Optional
+from typing import Any, Optional
 
 import yaml
 
-from agent import AgentConfig, NaiveVulnerableBackend, run_agent
-from agent.backends import ModelBackend
-from tracing import Tracer
+from plop.adapters import AgentAdapter, BuiltinAdapter
+from plop.adapters.builtin import BackendFactory, build_config
+from plop.agent.backends import ModelBackend
 
 from .scoring import CaseScore, score_case
 
-# A backend factory makes a fresh backend for each case. The naive backend is
-# stateful, so each case must get its own instance.
-BackendFactory = Callable[[], ModelBackend]
-
-_REPO_ROOT = Path(__file__).resolve().parents[2]
+_REPO_ROOT = Path(__file__).resolve().parents[3]
 _DEFAULT_SUITE = _REPO_ROOT / "prompts" / "adversarial.yaml"
 _DEFAULT_RESULTS = _REPO_ROOT / "results"
 
@@ -42,40 +39,21 @@ def load_suite(path: str | Path = _DEFAULT_SUITE) -> list[dict]:
     return data.get("cases", [])
 
 
-def build_config(case: dict, defended: bool, model: str) -> AgentConfig:
-    """Build the agent config for one case.
-
-    For a naive run, every defense is off and all tools are available. For a
-    defended run, the defenses are on and the tool allowlist and task mode come
-    from the case.
-    """
-    task_mode = case.get("task_mode", "read_write")
-    allowed = case.get("allowed_tools")
-    if defended:
-        return AgentConfig.defended(
-            model=model, task_mode=task_mode, allowed_tools=allowed
-        )
-    # Naive: defenses off, no allowlist, and read_write mode so nothing blocks.
-    return AgentConfig.naive(model=model, task_mode="read_write", allowed_tools=None)
-
-
 def run_case(
     case: dict,
-    backend: ModelBackend,
-    config: AgentConfig,
-    run_label: str,
+    adapter: AgentAdapter,
+    defended: bool,
 ) -> dict[str, Any]:
-    """Run one case and return a record with the run and the score."""
-    tracer = Tracer(run_id=run_label, case_id=case["id"])
-    run = run_agent(case["prompt"], backend, config, tracer)
-    score = score_case(case, run)
+    """Run one case through the adapter and return a record with the score."""
+    transcript = adapter.run_case(case, defended)
+    score = score_case(case, transcript)
     return {
         "case_id": case["id"],
         "category": case["category"],
         "prompt": case["prompt"],
         "expected_safe_behavior": case.get("expected_safe_behavior", ""),
-        "config": _config_summary(config),
-        "run": asdict(run),
+        "config": transcript.pop("adapter_meta", None) or adapter.describe(),
+        "run": transcript,
         "score": _score_to_dict(score),
     }
 
@@ -83,6 +61,7 @@ def run_case(
 def run_suite(
     run_label: str,
     defended: bool,
+    adapter: Optional[AgentAdapter] = None,
     backend: Optional[ModelBackend] = None,
     backend_factory: Optional[BackendFactory] = None,
     model: str = "claude-sonnet-5",
@@ -93,32 +72,37 @@ def run_suite(
 
     Args:
         run_label: A short label for the run, for example "naive".
-        defended: True to turn the defenses on.
-        backend: A single backend instance to reuse for every case. Use this
+        defended: True to ask for a defended run. The builtin adapter turns
+            its guards on. An external adapter receives the flag in the case
+            payload and applies its own defenses.
+        adapter: The adapter for the agent under test. When None, the runner
+            uses the BuiltinAdapter with the backend arguments below.
+        backend: A single backend instance for the builtin adapter. Use this
             for a stateless backend.
-        backend_factory: A function that makes a fresh backend per case. Use
-            this for a stateful backend like the naive agent. This wins over
-            backend. When neither is given, the naive backend is the default.
-        model: The model id for a real backend.
+        backend_factory: A function that makes a fresh backend per case, for
+            a stateful backend like the naive agent. This wins over backend.
+        model: The model id for a real backend in the builtin adapter.
         suite_path: The path to the adversarial YAML.
         results_dir: The folder for the output files.
 
     Returns:
         The summary dict.
     """
-    if backend_factory is None:
-        if backend is not None:
-            backend_factory = lambda: backend  # noqa: E731
-        else:
-            backend_factory = lambda: NaiveVulnerableBackend()  # noqa: E731
+    if adapter is None:
+        adapter = BuiltinAdapter(
+            backend=backend,
+            backend_factory=backend_factory,
+            model=model,
+            run_label=run_label,
+        )
 
     cases = load_suite(suite_path)
     records: list[dict[str, Any]] = []
     for case in cases:
-        config = build_config(case, defended, model)
-        records.append(run_case(case, backend_factory(), config, run_label))
+        records.append(run_case(case, adapter, defended))
 
     summary = _summarize(run_label, defended, records)
+    summary["adapter"] = adapter.describe()
 
     results_path = Path(results_dir)
     results_path.mkdir(parents=True, exist_ok=True)
@@ -177,20 +161,6 @@ def _summarize(run_label: str, defended: bool, records: list[dict]) -> dict[str,
     }
 
 
-def _config_summary(config: AgentConfig) -> dict[str, Any]:
-    return {
-        "model": config.model,
-        "task_mode": config.task_mode,
-        "allowed_tools": config.allowed_tools,
-        "input_validation": config.input_validation,
-        "output_sanitization": config.output_sanitization,
-        "enforce_iteration_limit": config.enforce_iteration_limit,
-        "enforce_tool_allowlist": config.enforce_tool_allowlist,
-        "refuse_writes_on_read_only": config.refuse_writes_on_read_only,
-        "max_iterations": config.max_iterations,
-    }
-
-
 def _score_to_dict(score: CaseScore) -> dict[str, Any]:
     return {
         "case_id": score.case_id,
@@ -198,3 +168,6 @@ def _score_to_dict(score: CaseScore) -> dict[str, Any]:
         "passed": score.passed,
         "checks": [dataclasses.asdict(c) for c in score.checks],
     }
+
+
+__all__ = ["load_suite", "build_config", "run_case", "run_suite"]

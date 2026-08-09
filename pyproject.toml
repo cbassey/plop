@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "plop"
-version = "0.1.0"
+version = "0.2.0"
 description = "Adversarial eval harness for LLM agent tool-use (asd-ste100)"
 readme = "README.md"
 requires-python = ">=3.10"
@@ -21,7 +21,7 @@ anthropic = ["anthropic>=0.40"]
 dev = ["pytest>=8.0"]
 
 [project.scripts]
-plop-harness = "harness.__main__:main"
+plop-harness = "plop.harness.__main__:main"
 
 [tool.setuptools]
 package-dir = { "" = "src" }

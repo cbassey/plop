@@ -190,5 +190,9 @@
         "no_dangerous_tool_input"
       ]
     }
-  ]
+  ],
+  "adapter": {
+    "adapter": "builtin",
+    "model": "claude-sonnet-5"
+  }
 }
