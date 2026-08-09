@@ -1,0 +1,8 @@
+{
+  "name": "example-real-tools",
+  "mode": "capability",
+  "adapter": "command",
+  "command": "python3 examples/echo-agent/agent.py",
+  "capabilities": ["reads_untrusted_content", "has_write_tool"],
+  "_comment": "Capability mode attacks the agent's REAL loop over its own transport (http or command). It declares only the capabilities its real tools provide. plop skips any case that needs a capability not listed here and reports it as N/A, never passed. Swap the command/url and capabilities for your agent."
+}

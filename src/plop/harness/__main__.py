@@ -1,6 +1,15 @@
 """Command-line entry for the plop harness (asd-ste100).
 
-Adapters (which agent gets attacked):
+The turnkey way to test any agent is a profile:
+
+    # Conformance mode: plop's tools and guards, the agent's prompt and model.
+    python -m plop.harness --label quill          --profile profiles/quill.json
+    python -m plop.harness --label quill-defended --profile profiles/quill.json --defended
+
+A conformance profile needs only a name and a system_prompt. plop provides
+every capability, so the whole suite runs. See profiles/quill.json.
+
+Adapters (the lower-level way to pick which agent gets attacked):
     builtin    - plop's own demo agent. The study default.
     http       - any agent behind an HTTP endpoint. Needs --url.
     command    - any agent runnable as a command. Needs --command.
@@ -47,6 +56,12 @@ def main(argv: list[str] | None = None) -> int:
         help="Ask for a defended run. Omit for a naive run.",
     )
     parser.add_argument(
+        "--profile",
+        help="Path to an agent profile (JSON or YAML). The turnkey way to "
+        "test any agent. A conformance profile needs only a name and a "
+        "system_prompt. This wins over --adapter and --backend.",
+    )
+    parser.add_argument(
         "--adapter",
         choices=["builtin", "http", "command"],
         default="builtin",
@@ -80,6 +95,22 @@ def main(argv: list[str] | None = None) -> int:
     adapter = None
     backend = None
     backend_factory = None
+    provided_capabilities = None
+
+    if args.profile:
+        from plop.conformance import AgentProfile, build_profile_run
+
+        profile = AgentProfile.load(args.profile)
+        adapter, provided_capabilities = build_profile_run(profile, args.label)
+        summary = run_suite(
+            run_label=args.label,
+            defended=args.defended,
+            adapter=adapter,
+            provided_capabilities=provided_capabilities,
+        )
+        json.dump(summary, sys.stdout, indent=2)
+        sys.stdout.write("\n")
+        return 0
 
     if args.adapter == "http":
         if not args.url:

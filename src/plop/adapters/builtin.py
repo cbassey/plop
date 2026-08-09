@@ -70,6 +70,7 @@ class BuiltinAdapter:
 def _config_summary(config: AgentConfig) -> dict:
     return {
         "model": config.model,
+        "system_prompt": config.system_prompt,
         "task_mode": config.task_mode,
         "allowed_tools": config.allowed_tools,
         "input_validation": config.input_validation,

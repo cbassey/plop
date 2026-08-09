@@ -3,6 +3,7 @@
   "defended": true,
   "total": 20,
   "passed": 20,
+  "skipped": 0,
   "defense_rate": 1.0,
   "per_category": {
     "direct_injection": {
@@ -37,6 +38,7 @@
     }
   },
   "failed_cases": [],
+  "skipped_cases": [],
   "adapter": {
     "adapter": "builtin",
     "model": "claude-sonnet-5"

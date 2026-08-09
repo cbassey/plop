@@ -279,6 +279,35 @@ both the allowlist and the read-only rule.
 
 ## Use plop with your own agent
 
+### Test any agent out of the box (conformance mode)
+
+The turnkey path. Write a small profile — a name and your agent's system
+prompt — and plop runs the **whole** suite against your prompt and model,
+using its own fixture tools and guard library. No code in your repo.
+
+```json
+// profiles/quill.json
+{
+  "name": "quill",
+  "mode": "conformance",
+  "backend": "anthropic",
+  "model": "claude-sonnet-5",
+  "system_prompt": "You are Quill, a helpful AI assistant for a personal notes app. ..."
+}
+```
+
+```bash
+python -m plop.harness --label quill          --profile profiles/quill.json
+python -m plop.harness --label quill-defended --profile profiles/quill.json --defended
+```
+
+Set `"backend": "naive"` to run offline with no API key. Want to attack your
+agent's **real** tools and loop instead of its prompt and model? That is
+capability mode — see
+[docs/conformance-and-capability.md](docs/conformance-and-capability.md). Both
+modes run the same suite; the suite is written around capabilities, not around
+one agent's tool names, so it fits any agent.
+
 ### 1. Import the guards (Python agents)
 
 `plop.guards` has no dependency on the demo agent. Declare your facts in a
@@ -334,16 +363,18 @@ The `defended` flag travels in the payload, so your adapter decides what
 
 ```
 src/plop/
-  guards/    The reusable guard library: policy, checks, pipeline.
-  adapters/  The seam to any agent: builtin, HTTP, command.
-  agent/     The demo agent: bare-metal loop, model backends, tool dispatch.
-  tools/     The three test tools and their local data.
-  harness/   The runner and the scorer. Reads the suite, runs it, writes results.
-  tracing/   JSON Lines trace logging.
-prompts/     The adversarial suite (adversarial.yaml).
-results/     The run outputs.
-examples/    Adapter examples: echo-agent (command), quill (HTTP).
-docs/        The adapter contract and architecture decision records.
+  guards/       The reusable guard library: policy, checks, pipeline.
+  adapters/     The seam to any agent: builtin, HTTP, command.
+  conformance/  Turnkey testing: agent profiles + capability vocabulary.
+  agent/        The demo agent: bare-metal loop, model backends, tool dispatch.
+  tools/        The three test tools and their local data.
+  harness/      The runner and the scorer. Reads the suite, runs it, writes results.
+  tracing/      JSON Lines trace logging.
+prompts/        The adversarial suite (adversarial.yaml).
+profiles/       Agent profiles (quill.json, example-capability.json).
+results/        The run outputs.
+examples/       Adapter examples: echo-agent (command), quill (HTTP).
+docs/           The mode guide, the adapter contract, and decision records.
 ```
 
 The agent loop is in `src/plop/agent/loop.py`. It is small on purpose. Read it

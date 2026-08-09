@@ -25,6 +25,7 @@ import yaml
 from plop.adapters import AgentAdapter, BuiltinAdapter
 from plop.adapters.builtin import BackendFactory, build_config
 from plop.agent.backends import ModelBackend
+from plop.conformance.capabilities import case_requirements, is_supported
 
 from .scoring import CaseScore, score_case
 
@@ -46,7 +47,9 @@ def run_case(
 ) -> dict[str, Any]:
     """Run one case through the adapter and return a record with the score."""
     transcript = adapter.run_case(case, defended)
-    score = score_case(case, transcript)
+    meta = transcript.get("adapter_meta") or {}
+    system_prompt = meta.get("system_prompt", "") if isinstance(meta, dict) else ""
+    score = score_case(case, transcript, system_prompt=system_prompt)
     return {
         "case_id": case["id"],
         "category": case["category"],
@@ -55,6 +58,31 @@ def run_case(
         "config": transcript.pop("adapter_meta", None) or adapter.describe(),
         "run": transcript,
         "score": _score_to_dict(score),
+    }
+
+
+def _skipped_record(case: dict, missing: set[str]) -> dict[str, Any]:
+    """Return a record for a case the agent cannot support.
+
+    A skipped case is N/A: it never counts as passed and it is left out of the
+    denominator. This keeps the defense rate honest — an agent does not get
+    credit for an attack that could not even be delivered.
+    """
+    return {
+        "case_id": case["id"],
+        "category": case["category"],
+        "prompt": case["prompt"],
+        "expected_safe_behavior": case.get("expected_safe_behavior", ""),
+        "config": None,
+        "run": None,
+        "score": {
+            "case_id": case["id"],
+            "category": case["category"],
+            "passed": None,
+            "skipped": True,
+            "skipped_reason": f"agent lacks capabilities: {sorted(missing)}",
+            "checks": [],
+        },
     }
 
 
@@ -67,6 +95,7 @@ def run_suite(
     model: str = "claude-sonnet-5",
     suite_path: str | Path = _DEFAULT_SUITE,
     results_dir: str | Path = _DEFAULT_RESULTS,
+    provided_capabilities: Optional[set[str]] = None,
 ) -> dict[str, Any]:
     """Run the whole suite once and write the results.
 
@@ -84,6 +113,10 @@ def run_suite(
         model: The model id for a real backend in the builtin adapter.
         suite_path: The path to the adversarial YAML.
         results_dir: The folder for the output files.
+        provided_capabilities: The capabilities the agent has. A case that
+            needs a capability outside this set is skipped and reported as
+            N/A. None means the agent has every capability, so nothing is
+            skipped (the builtin and conformance default).
 
     Returns:
         The summary dict.
@@ -99,7 +132,13 @@ def run_suite(
     cases = load_suite(suite_path)
     records: list[dict[str, Any]] = []
     for case in cases:
-        records.append(run_case(case, adapter, defended))
+        if provided_capabilities is not None and not is_supported(
+            case, provided_capabilities
+        ):
+            missing = case_requirements(case) - provided_capabilities
+            records.append(_skipped_record(case, missing))
+        else:
+            records.append(run_case(case, adapter, defended))
 
     summary = _summarize(run_label, defended, records)
     summary["adapter"] = adapter.describe()
@@ -116,13 +155,25 @@ def run_suite(
     return summary
 
 
+def _is_skipped(record: dict) -> bool:
+    return bool(record["score"].get("skipped"))
+
+
 def _summarize(run_label: str, defended: bool, records: list[dict]) -> dict[str, Any]:
-    """Build the summary with the defense rate overall and per category."""
-    total = len(records)
-    passed = sum(1 for r in records if r["score"]["passed"])
+    """Build the summary with the defense rate overall and per category.
+
+    Skipped cases (the agent lacked a capability) are N/A: they are left out of
+    the denominator and never count as passed. They are listed on their own so
+    coverage stays visible.
+    """
+    scored = [r for r in records if not _is_skipped(r)]
+    skipped = [r for r in records if _is_skipped(r)]
+
+    total = len(scored)
+    passed = sum(1 for r in scored if r["score"]["passed"])
 
     by_cat: dict[str, dict[str, int]] = {}
-    for r in records:
+    for r in scored:
         cat = r["category"]
         bucket = by_cat.setdefault(cat, {"total": 0, "passed": 0})
         bucket["total"] += 1
@@ -146,8 +197,17 @@ def _summarize(run_label: str, defended: bool, records: list[dict]) -> dict[str,
                 c["name"] for c in r["score"]["checks"] if not c["passed"]
             ],
         }
-        for r in records
+        for r in scored
         if not r["score"]["passed"]
+    ]
+
+    skipped_cases = [
+        {
+            "case_id": r["case_id"],
+            "category": r["category"],
+            "reason": r["score"].get("skipped_reason", ""),
+        }
+        for r in skipped
     ]
 
     return {
@@ -155,9 +215,11 @@ def _summarize(run_label: str, defended: bool, records: list[dict]) -> dict[str,
         "defended": defended,
         "total": total,
         "passed": passed,
+        "skipped": len(skipped),
         "defense_rate": round(passed / total, 3) if total else 0.0,
         "per_category": per_category,
         "failed_cases": failed_cases,
+        "skipped_cases": skipped_cases,
     }
 
 
@@ -166,6 +228,7 @@ def _score_to_dict(score: CaseScore) -> dict[str, Any]:
         "case_id": score.case_id,
         "category": score.category,
         "passed": score.passed,
+        "skipped": False,
         "checks": [dataclasses.asdict(c) for c in score.checks],
     }
 
