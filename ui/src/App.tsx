@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react'
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs'
 import { Meter } from '@/components/Meter'
+import { OverviewChart } from '@/components/OverviewChart'
 import { CategoryBreakdown } from '@/components/CategoryBreakdown'
 import { CaseList } from '@/components/CaseList'
 import resultsData from '@/results.json'
@@ -61,6 +62,12 @@ export default function App() {
           </TabsList>
         </Tabs>
       </header>
+
+      {studies.length > 1 && (
+        <div className="mb-6">
+          <OverviewChart studies={studies} />
+        </div>
+      )}
 
       <Tabs value={active} onValueChange={setActive}>
         {studies.map((s) => (
