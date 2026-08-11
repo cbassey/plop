@@ -24,3 +24,8 @@ env/
 
 # Results: keep the folder and the committed baseline runs, ignore ad-hoc runs.
 results/scratch-*.json
+results/run-ui-*.json
+results/summary-ui-*.json
+
+# UI-generated temp profiles
+profiles/.ui/
