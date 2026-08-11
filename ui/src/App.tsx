@@ -1,102 +1,132 @@
 import { useCallback, useEffect, useState } from 'react'
-import { RunPanel } from '@/components/RunPanel'
-import { ResultsPanel } from '@/components/ResultsPanel'
-import { api } from '@/api/client'
-import { Segmented } from '@/components/ui/form'
-import resultsFallback from '@/results.json'
-import type { ResultsFile } from '@/types'
-import { cn } from '@/lib/utils'
+import { AlertCircle } from 'lucide-react'
+import { Shell, NavLink, PrimaryButton } from '@/components/Shell'
+import { RunsView } from '@/views/RunsView'
+import { NewRunView } from '@/views/NewRunView'
+import { StudyView } from '@/views/StudyView'
+import { fetchResults } from '@/lib/api'
+import type { Study } from '@/types'
+import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
+import { Button } from '@/components/ui/button'
 
-type View = 'run' | 'results'
+type Route =
+  | { name: 'runs' }
+  | { name: 'new' }
+  | { name: 'study'; study: string }
 
 export default function App() {
-  const [view, setView] = useState<View>('run')
-  const [data, setData] = useState<ResultsFile>(resultsFallback as ResultsFile)
-  const [active, setActive] = useState(data.studies[0]?.name ?? '')
-  const [refreshing, setRefreshing] = useState(false)
+  const [studies, setStudies] = useState<Study[]>([])
+  const [loading, setLoading] = useState(true)
+  const [loadError, setLoadError] = useState<string | null>(null)
+  const [route, setRoute] = useState<Route>({ name: 'runs' })
 
-  const refresh = useCallback(async (persist = false) => {
-    setRefreshing(true)
+  const reload = useCallback(async () => {
+    setLoading(true)
+    setLoadError(null)
     try {
-      const next = persist ? await api.syncResults() : await api.results()
-      setData(next)
-      setActive((prev) =>
-        next.studies.some((s) => s.name === prev)
-          ? prev
-          : (next.studies[0]?.name ?? '')
-      )
-    } catch {
-      // Keep bundled fallback when API is offline.
+      const data = await fetchResults()
+      setStudies(data.studies)
+    } catch (err) {
+      setLoadError(err instanceof Error ? err.message : String(err))
     } finally {
-      setRefreshing(false)
+      setLoading(false)
     }
   }, [])
 
   useEffect(() => {
-    void refresh(false)
-  }, [refresh])
+    void reload()
+  }, [reload])
 
-  function handleFinished(studyName: string) {
-    void (async () => {
-      await refresh(true)
-      setActive(studyName)
-      setView('results')
-    })()
+  function handleDeleted(next: Study[]) {
+    setStudies(next)
+    setRoute({ name: 'runs' })
   }
 
+  const study =
+    route.name === 'study'
+      ? studies.find((s) => s.name === route.study)
+      : undefined
+
   return (
-    <div className="mx-auto min-h-screen max-w-6xl px-5 py-8 sm:px-8">
-      <header className="mb-8 flex flex-col gap-5 border-b border-border pb-6 sm:flex-row sm:items-end sm:justify-between">
-        <div>
-          <div className="flex items-center gap-3">
-            <span className="grid h-9 w-9 place-items-center rounded-md border border-signal/40 bg-signal/10 font-display text-lg font-extrabold text-signal">
-              p
-            </span>
-            <div>
-              <h1 className="font-display text-3xl font-extrabold tracking-tight">
-                plop
-              </h1>
-              <p className="font-mono text-[10px] uppercase tracking-[0.2em] text-muted-foreground">
-                adversarial tool-use harness
-              </p>
-            </div>
-          </div>
-          <p className="mt-3 max-w-md text-sm text-muted-foreground">
-            Configure a study, run guards off then on, and read the defense
-            rate — without leaving the console.
+    <Shell
+      nav={
+        <NavLink
+          active={route.name === 'runs' || route.name === 'study'}
+          onClick={() => setRoute({ name: 'runs' })}
+        >
+          Runs
+        </NavLink>
+      }
+      action={
+        route.name !== 'new' ? (
+          <PrimaryButton onClick={() => setRoute({ name: 'new' })}>
+            Score my prompt
+          </PrimaryButton>
+        ) : undefined
+      }
+    >
+      {loadError && (
+        <Alert variant="destructive" className="mb-8">
+          <AlertCircle className="h-4 w-4" />
+          <AlertTitle>Couldn’t load runs</AlertTitle>
+          <AlertDescription className="flex flex-wrap items-center gap-3">
+            <span>{loadError}</span>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={() => void reload()}
+            >
+              Retry
+            </Button>
+          </AlertDescription>
+        </Alert>
+      )}
+
+      {loading &&
+      route.name === 'runs' &&
+      studies.length === 0 &&
+      !loadError ? (
+        <div className="py-20 text-center text-[14px] text-muted-foreground">
+          Loading studies…
+        </div>
+      ) : route.name === 'new' ? (
+        <NewRunView
+          onCancel={() => setRoute({ name: 'runs' })}
+          onDone={async (name) => {
+            await reload()
+            setRoute({ name: 'study', study: name })
+          }}
+        />
+      ) : route.name === 'study' && study ? (
+        <StudyView
+          study={study}
+          onBack={() => setRoute({ name: 'runs' })}
+          onDeleted={handleDeleted}
+        />
+      ) : route.name === 'study' && !study ? (
+        <div className="rounded-2xl border border-dashed border-border px-6 py-16 text-center">
+          <p className="font-display text-xl font-medium text-foreground">
+            Run not found
           </p>
+          <p className="mx-auto mt-3 max-w-md text-[15px] leading-relaxed text-muted-foreground">
+            It may have been deleted, or the name doesn’t match anything on
+            disk.
+          </p>
+          <div className="mt-8">
+            <PrimaryButton onClick={() => setRoute({ name: 'runs' })}>
+              Back to runs
+            </PrimaryButton>
+          </div>
         </div>
-
-        <div className="flex items-center gap-3">
-          <Segmented
-            value={view}
-            onChange={setView}
-            options={[
-              { value: 'run', label: 'Run' },
-              { value: 'results', label: 'Results' },
-            ]}
-          />
-          <span
-            className={cn(
-              'hidden h-2 w-2 rounded-full sm:inline-block',
-              refreshing ? 'animate-pulse bg-warn' : 'bg-signal/70'
-            )}
-            title={refreshing ? 'syncing' : 'ready'}
-          />
-        </div>
-      </header>
-
-      {view === 'run' ? (
-        <RunPanel onFinished={handleFinished} />
       ) : (
-        <ResultsPanel
-          data={data}
-          active={active}
-          onSelect={setActive}
-          onRefresh={() => void refresh(true)}
-          refreshing={refreshing}
+        <RunsView
+          studies={studies}
+          onOpen={(name) => setRoute({ name: 'study', study: name })}
+          onNew={() => setRoute({ name: 'new' })}
+          onDeleted={handleDeleted}
         />
       )}
-    </div>
+    </Shell>
   )
 }

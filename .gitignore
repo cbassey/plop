@@ -21,6 +21,8 @@ env/
 
 # Environment
 .env
+.secrets.json
+.secrets.json.bak
 
 # Results: keep the folder and the committed baseline runs, ignore ad-hoc runs.
 results/scratch-*.json

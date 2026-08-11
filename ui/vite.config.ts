@@ -1,22 +1,18 @@
 import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
 import path from 'path'
+// Local middleware plugin (plain ESM, no TS types).
+// @ts-expect-error — .mjs shim for the harness API
+import { harnessApiPlugin } from './server/harness-api.mjs'
 
 export default defineConfig({
-  plugins: [react()],
+  plugins: [react(), harnessApiPlugin()],
   resolve: {
     alias: {
       '@': path.resolve(import.meta.dirname, './src'),
     },
   },
   server: {
-    host: '127.0.0.1',
     port: 5173,
-    proxy: {
-      '/api': {
-        target: 'http://127.0.0.1:8787',
-        changeOrigin: true,
-      },
-    },
   },
 })

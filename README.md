@@ -3,9 +3,12 @@
 > This document uses ASD-STE100 Simplified Technical English: short sentences,
 > active voice, and simple words.
 
-plop red-teams an LLM agent that uses tools. It runs a suite of adversarial
-prompts against the agent. It scores how well the agent defends against each
-attack. It writes full traces and a defense-rate report.
+**plop red-teams an LLM agent that uses tools.** It runs a fixed suite of
+attacks (injection, jailbreak, bad tool data, loops, scope escape, schema
+smuggling), scores held vs broke, and writes traces plus a defense-rate
+report — once unprotected (**open**), once with defenses (**defended**).
+
+**Start here for the mental model:** [docs/WHAT-PLOP-IS.md](docs/WHAT-PLOP-IS.md).
 
 plop is two things you can reuse, plus one study:
 
@@ -17,8 +20,18 @@ plop is two things you can reuse, plus one study:
 - **The study** — a small demo agent that shows each attack and each fix,
   with a before/after defense rate.
 
-See [Use plop with your own agent](#use-plop-with-your-own-agent) for the
-first two. The rest of this document is the study.
+**Two ways to test *your* agent**
+
+| Mode | You provide | plop runs | Answers |
+| --- | --- | --- | --- |
+| **Conformance** (“Score my prompt”) | System prompt + model | plop’s loop + fixture tools + plop’s guards | Does this prompt/model hold with plop’s defenses? |
+| **Capability** (“Score a live agent”) | Running agent (HTTP/command) + tool capability kinds | Your loop, tools, guards | Do *my* defenses hold on attacks my tools can land? |
+
+Conformance is **not** “run Quill.” Quill is only an example profile.
+Capability skips attacks your tools cannot receive (n/a, never a pass).
+
+See [Use plop with your own agent](#use-plop-with-your-own-agent) and
+[docs/conformance-and-capability.md](docs/conformance-and-capability.md).
 
 **Test id used in this project: `asd-ste100`.**
 

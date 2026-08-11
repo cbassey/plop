@@ -17,6 +17,7 @@ from __future__ import annotations
 
 import dataclasses
 import json
+import sys
 from pathlib import Path
 from typing import Any, Optional
 
@@ -131,14 +132,41 @@ def run_suite(
 
     cases = load_suite(suite_path)
     records: list[dict[str, Any]] = []
-    for case in cases:
+    total = len(cases)
+    for index, case in enumerate(cases, start=1):
+        case_id = case.get("id", f"case-{index}")
+        print(
+            f"[{index}/{total}] {case_id} …",
+            file=sys.stderr,
+            flush=True,
+        )
         if provided_capabilities is not None and not is_supported(
             case, provided_capabilities
         ):
             missing = case_requirements(case) - provided_capabilities
-            records.append(_skipped_record(case, missing))
+            record = _skipped_record(case, missing)
+            records.append(record)
+            print(
+                f"[{index}/{total}] {case_id} skip",
+                file=sys.stderr,
+                flush=True,
+            )
+            continue
+
+        record = run_case(case, adapter, defended)
+        records.append(record)
+        score = record.get("score") or {}
+        if score.get("skipped"):
+            mark = "skip"
+        elif score.get("passed"):
+            mark = "held"
         else:
-            records.append(run_case(case, adapter, defended))
+            mark = "broke"
+        print(
+            f"[{index}/{total}] {case_id} {mark}",
+            file=sys.stderr,
+            flush=True,
+        )
 
     summary = _summarize(run_label, defended, records)
     summary["adapter"] = adapter.describe()

@@ -33,17 +33,17 @@ export function CategoryBreakdown({
   ].sort()
 
   return (
-    <div className="rounded-lg border border-border bg-card">
-      <div className="flex items-center justify-between border-b border-border px-5 py-3">
-        <span className="font-mono text-[11px] uppercase tracking-[0.2em] text-muted-foreground">
-          By attack class
+    <div className="overflow-hidden rounded-2xl border border-border bg-card">
+      <div className="flex items-center justify-between border-b border-border px-5 py-3.5">
+        <span className="text-[12px] text-muted-foreground">
+          By attack type
         </span>
-        <div className="flex gap-4 font-mono text-[10px] uppercase tracking-[0.15em]">
+        <div className="flex gap-4 text-[12px]">
           <span className="flex items-center gap-1.5 text-muted-foreground">
-            <span className="h-2 w-2 rounded-full bg-warn" /> off
+            <span className="h-2 w-2 rounded-full bg-foreground/40" /> without
           </span>
-          <span className="flex items-center gap-1.5 text-signal">
-            <span className="h-2 w-2 rounded-full bg-signal" /> on
+          <span className="flex items-center gap-1.5 text-foreground">
+            <span className="h-2 w-2 rounded-full bg-foreground" /> with defenses
           </span>
         </div>
       </div>
@@ -57,10 +57,10 @@ export function CategoryBreakdown({
                 {prettyCategory(cat)}
               </div>
               <div className="self-center">
-                {n ? <Track passed={n.passed} total={n.total} tone="bg-warn" /> : <Dash />}
+                {n ? <Track passed={n.passed} total={n.total} tone="bg-foreground/40" /> : <Dash />}
               </div>
               <div className="self-center">
-                {d ? <Track passed={d.passed} total={d.total} tone="bg-signal" /> : <Dash />}
+                {d ? <Track passed={d.passed} total={d.total} tone="bg-foreground" /> : <Dash />}
               </div>
             </div>
           )

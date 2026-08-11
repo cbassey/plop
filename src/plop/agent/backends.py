@@ -13,7 +13,27 @@ from __future__ import annotations
 
 import os
 from dataclasses import dataclass, field
+from pathlib import Path
 from typing import Any, Optional, Protocol
+
+
+def _load_api_key_from_dotenv() -> str:
+    """Read ANTHROPIC_API_KEY from plop/.env if the env var is unset."""
+    # backends.py lives at src/plop/agent/backends.py → plop root is parents[3]
+    root = Path(__file__).resolve().parents[3]
+    env_path = root / ".env"
+    if not env_path.is_file():
+        return ""
+    for line in env_path.read_text(encoding="utf-8").splitlines():
+        trimmed = line.strip()
+        if not trimmed or trimmed.startswith("#") or "=" not in trimmed:
+            continue
+        key, _, value = trimmed.partition("=")
+        if key.strip() != "ANTHROPIC_API_KEY":
+            continue
+        value = value.strip().strip("'").strip('"')
+        return value
+    return ""
 
 
 @dataclass
@@ -75,7 +95,18 @@ class AnthropicBackend:
                     "The anthropic package is not installed. "
                     "Install it, or use MockBackend for offline runs."
                 ) from exc
-            self._client = anthropic.Anthropic()
+            api_key = os.environ.get("ANTHROPIC_API_KEY", "").strip()
+            if not api_key:
+                # Load plop/.env when the shell did not export the key
+                # (common when the UI spawns the harness).
+                api_key = _load_api_key_from_dotenv()
+            if not api_key:
+                raise RuntimeError(
+                    "ANTHROPIC_API_KEY is not set. "
+                    "Add it to plop/.env (see .env.example) or export it, "
+                    "then retry. Or pick an offline model."
+                )
+            self._client = anthropic.Anthropic(api_key=api_key)
         return self._client
 
     def complete(self, system, messages, tool_specs) -> ModelResponse:

@@ -1,11 +1,11 @@
 # plop dashboard
 
-Instrument-console UI for the plop adversarial harness. Configure a study,
-run guards off then on, and read defense rates, category breakdowns, and
-case traces — from the browser.
+Local UI for the plop adversarial harness. Same runner as the CLI
+(`python -m plop.harness`).
 
-Vite + React + Tailwind + shadcn/ui. A small local API
-(`server/api.mjs`) shells out to `python -m plop.harness`.
+**What plop does:** attacks a tool-using agent (injection, jailbreak, bad
+tool data, loops, scope escape, schema smuggling) and scores held vs broke —
+open, then defended. Mental model: `../docs/WHAT-PLOP-IS.md`.
 
 ## Use
 
@@ -16,37 +16,25 @@ pip install -e ".[dev]"
 
 cd ui
 npm install
-npm run dev      # API :8787 + UI http://localhost:5173
+npm run sync     # optional: refresh src/results.json from ../results
+npm run dev      # http://localhost:5173  (API + UI)
 ```
 
-`npm run dev` starts both the Vite app and the harness API. The UI talks to
-`/api/*` (proxied to the API).
+### Paths in the UI
 
-Offline-only sync of existing result files:
+| UI | Mode | What you bring |
+| --- | --- | --- |
+| Score my prompt | Conformance | System prompt (+ model) |
+| Try the demo | Builtin | Nothing (offline sample agent) |
+| Score a live agent | Capability | Running agent adapter + tool kinds |
 
-```bash
-npm run sync     # read ../results/*.json into src/results.json
-```
+### Views
 
-`npm run build` type-checks and produces a static bundle in `dist/`.
+- **Runs** — open vs defended rates + glossary
+- **Score my prompt** — primary happy path
+- **Results** — Score / Attack types / Attacks
 
-## Views
+Live API keys can be saved on this machine in `../.secrets.json` (gitignored).
 
-- **Run** — conformance (paste your system prompt), capability (point at a
-  live adapter + declare tool capabilities), or the builtin demo. Starts a
-  naive → defended pair and streams status.
-- **Results** — study list + Overview / Classes / Cases panes (not one long
-  scroll). Sync pulls the latest `results/` files.
-
-## How it reads plop
-
-`scripts/build-results.mjs` reads `../results/run-*.json` and pairs each
-`<base>-naive` / `<base>-defended` run into one study. The API rewrites
-`src/results.json` after every UI-triggered run; `npm run sync` does the
-same from the CLI.
-
-## shadcn
-
-Components live in `src/components/ui` and are owned in-repo (the shadcn
-model). `components.json` is set up so `npx shadcn@latest add <component>`
-works if you want more.
+`npm run build` type-checks and produces `dist/`. The harness API is only
+available under `npm run dev`.

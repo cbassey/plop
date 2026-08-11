@@ -1,4 +1,4 @@
-@import url('https://fonts.googleapis.com/css2?family=Archivo:wght@500;600;700;800;900&family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Archivo:wght@500;600;700;800&family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600&display=swap');
 
 @tailwind base;
 @tailwind components;
@@ -6,27 +6,29 @@
 
 @layer base {
   :root {
-    /* Instrument console — dark phosphor. This is a single committed look. */
-    --background: 150 12% 4%;
-    --foreground: 90 8% 88%;
-    --card: 150 12% 6%;
-    --card-foreground: 90 8% 88%;
-    --primary: 141 76% 62%;
-    --primary-foreground: 150 30% 6%;
-    --secondary: 150 8% 14%;
-    --secondary-foreground: 90 8% 88%;
-    --muted: 150 8% 12%;
-    --muted-foreground: 120 6% 52%;
-    --accent: 150 10% 16%;
-    --accent-foreground: 141 76% 62%;
-    --destructive: 8 82% 60%;
-    --destructive-foreground: 0 0% 98%;
-    --border: 150 10% 14%;
-    --input: 150 10% 14%;
-    --ring: 141 76% 62%;
-    --signal: 141 76% 62%;
-    --warn: 38 92% 60%;
-    --radius: 0.35rem;
+    /* Rams-adjacent: near-black canvas, white type, gray secondary. No chroma. */
+    --background: 0 0% 2%;
+    --foreground: 0 0% 100%;
+    --card: 0 0% 5%;
+    --card-foreground: 0 0% 100%;
+    --popover: 0 0% 5%;
+    --popover-foreground: 0 0% 100%;
+    --primary: 0 0% 100%;
+    --primary-foreground: 0 0% 2%;
+    --secondary: 0 0% 10%;
+    --secondary-foreground: 0 0% 100%;
+    --muted: 0 0% 12%;
+    --muted-foreground: 0 0% 58%;
+    --accent: 0 0% 9%;
+    --accent-foreground: 0 0% 100%;
+    --destructive: 0 0% 100%;
+    --destructive-foreground: 0 0% 2%;
+    --border: 0 0% 16%;
+    --input: 0 0% 16%;
+    --ring: 0 0% 100%;
+    --signal: 0 0% 100%;
+    --warn: 0 0% 58%;
+    --radius: 0.625rem;
   }
 
   * {
@@ -34,19 +36,20 @@
   }
 
   body {
-    @apply bg-background text-foreground font-sans;
+    @apply bg-background text-foreground font-sans antialiased;
     font-feature-settings: 'ss01', 'cv01';
-    /* Faint instrument grid over a near-black ground. */
-    background-image:
-      linear-gradient(hsl(var(--border) / 0.35) 1px, transparent 1px),
-      linear-gradient(90deg, hsl(var(--border) / 0.35) 1px, transparent 1px),
-      radial-gradient(circle at 50% -10%, hsl(var(--signal) / 0.06), transparent 55%);
-    background-size: 44px 44px, 44px 44px, 100% 100%;
-    background-attachment: fixed;
   }
 
   ::selection {
-    background: hsl(var(--signal) / 0.28);
+    background: hsl(0 0% 100% / 0.18);
+  }
+
+  button:focus-visible,
+  input:focus-visible,
+  textarea:focus-visible,
+  select:focus-visible {
+    outline: 2px solid hsl(var(--ring) / 0.35);
+    outline-offset: 2px;
   }
 }
 
@@ -59,7 +62,17 @@
     position: absolute;
     inset: 0;
     pointer-events: none;
-    opacity: 0.04;
+    opacity: 0.03;
     background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='120' height='120'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.8' numOctaves='3'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
   }
 }

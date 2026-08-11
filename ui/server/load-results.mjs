@@ -1,15 +1,8 @@
-// Shared: read ../results/run-*.json into a studies payload.
-// Used by sync-results.mjs and the local API server.
-import { readdirSync, readFileSync, writeFileSync, mkdirSync, existsSync } from 'node:fs'
-import { dirname, join } from 'node:path'
-import { fileURLToPath } from 'node:url'
+// Pair ../results/run-*.json into studies for the dashboard / API.
+import { readdirSync, readFileSync, existsSync } from 'node:fs'
+import { join } from 'node:path'
 
-const here = dirname(fileURLToPath(import.meta.url))
-export const ROOT = join(here, '..', '..')
-export const RESULTS_DIR = join(ROOT, 'results')
-export const OUT_FILE = join(here, '..', 'src', 'results.json')
-
-function baseName(label) {
+export function baseName(label) {
   if (label === 'defended' || label === 'naive') return 'builtin-demo'
   if (label.endsWith('-defended')) return label.slice(0, -'-defended'.length)
   if (label.endsWith('-naive')) return label.slice(0, -'-naive'.length)
@@ -25,20 +18,22 @@ function slim(run) {
   return rest
 }
 
-export function buildResults() {
-  if (!existsSync(RESULTS_DIR)) {
+export function loadStudies(resultsDir) {
+  if (!existsSync(resultsDir)) {
     return { studies: [] }
   }
 
-  const files = readdirSync(RESULTS_DIR).filter(
+  const files = readdirSync(resultsDir).filter(
     (f) => f.startsWith('run-') && f.endsWith('.json')
   )
+
   const studies = new Map()
 
   for (const file of files) {
     const label = file.slice('run-'.length, -'.json'.length)
-    const data = JSON.parse(readFileSync(join(RESULTS_DIR, file), 'utf8'))
+    const data = JSON.parse(readFileSync(join(resultsDir, file), 'utf8'))
     const summary = data.summary
+    if (!summary) continue
     const records = (data.records || []).map((r) => ({
       ...r,
       run: slim(r.run),
@@ -53,12 +48,8 @@ export function buildResults() {
   }
 
   return {
-    studies: [...studies.values()].sort((a, b) => a.name.localeCompare(b.name)),
+    studies: [...studies.values()].sort((a, b) =>
+      a.name.localeCompare(b.name)
+    ),
   }
-}
-
-export function writeResultsFile(data = buildResults()) {
-  mkdirSync(dirname(OUT_FILE), { recursive: true })
-  writeFileSync(OUT_FILE, JSON.stringify(data, null, 2))
-  return data
 }
