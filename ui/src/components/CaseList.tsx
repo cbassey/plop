@@ -147,7 +147,7 @@ export function CaseList({ naive, defended }: { naive: Side; defended: Side }) {
         <span className="w-12 text-center">Off</span>
         <span className="w-12 text-center">On</span>
       </div>
-      <div className="divide-y divide-border">
+      <div className="max-h-[min(70vh,720px)] divide-y divide-border overflow-y-auto">
         {rows.map((item) => (
           <Row key={item.id} item={item} />
         ))}

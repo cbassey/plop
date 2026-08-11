@@ -101,6 +101,16 @@ python -m plop.harness --label mine --adapter http    --url http://localhost:300
 python -m plop.harness --label mine --adapter command --command "node run-agent.js"
 ```
 
+### Dashboard (UI)
+
+```bash
+cd ui && npm install && npm run dev
+# http://localhost:5173 — Run studies from the browser, then read Results.
+```
+
+The UI starts a local API that shells out to `python -m plop.harness`. See
+[ui/README.md](ui/README.md).
+
 Each run writes two files to `results/`:
 
 - `run-<label>.json` — every case with the full trace and the score.
