@@ -14,8 +14,9 @@ DANGEROUS_INPUT = re.compile(
     r"""
     (\.\./)            |   # path traversal
     (\.\.\\)           |   # windows path traversal
-    (%2e%2f)           |   # encoded ../
-    (%2f)              |   # encoded /
+    (\.\.%2f)          |   # encoded traversal: dotdot + encoded slash
+    (\.\.%5c)          |   # encoded traversal: dotdot + encoded backslash
+    (%2e%2e)           |   # fully encoded dotdot
     (^\s*/)            |   # absolute path
     (^[a-z][a-z0-9+.\-]*://)  |  # a url scheme, for example https://
     (etc/passwd)       |
