@@ -147,11 +147,32 @@ function buildProfile(body) {
       adapter: body.adapter || 'http',
       capabilities: caps,
     }
+    const tools = normalizeTools(body.tools)
+    // A named tool inventory binds attacks to real tool names; when present
+    // the profile derives capabilities from it (capabilities stays as a hint).
+    if (tools.length) profile.tools = tools
     if (profile.adapter === 'http') profile.url = body.url
     if (profile.adapter === 'command') profile.command = body.command
     return profile
   }
   return null
+}
+
+/** Clean a tool inventory: keep named tools, keep only known kinds. */
+function normalizeTools(raw) {
+  if (!Array.isArray(raw)) return []
+  return raw
+    .map((t) => ({
+      name: String((t && t.name) || '').trim(),
+      kinds: Array.isArray(t && t.kinds)
+        ? t.kinds.filter((k) => CAPABILITIES.includes(k))
+        : [],
+    }))
+    .filter((t) => t.name)
+}
+
+function normalizeJudge(raw) {
+  return ['rule', 'anthropic'].includes(raw) ? raw : 'off'
 }
 
 function validateBody(body) {
@@ -178,6 +199,12 @@ function validateBody(body) {
     return (
       'Live API needs an API key. Paste one under Model options ' +
       '(saved only on this machine), or use an offline model.'
+    )
+  }
+  if (normalizeJudge(body.judge) === 'anthropic' && !hasAnthropicKey(body.api_key)) {
+    return (
+      'The live judge needs an API key. Add one under Model options, ' +
+      'or pick the offline judge.'
     )
   }
   return null
@@ -211,6 +238,31 @@ function runHarness(args, onLog, envOverrides = {}) {
     child.on('error', (err) => {
       onLog(String(err))
       resolve({ code: 1, stdout, stderr: String(err) })
+    })
+  })
+}
+
+/** Annotate a finished run with the advisory judge. Never fails the job —
+ *  the judge cannot change the score, so a judge error is only a missing note. */
+function runJudge(label, kind, onLog, envOverrides = {}) {
+  return new Promise((resolve) => {
+    const runPath = join(resultsDir, `run-${label}.json`)
+    if (!existsSync(runPath)) {
+      onLog(`judge: no run file for ${label}, skipped\n`)
+      return resolve()
+    }
+    const python = resolvePython()
+    onLog(`\n› python -m plop.judge --run run-${label}.json --judge ${kind}\n`)
+    const child = spawn(
+      python,
+      ['-m', 'plop.judge', '--run', runPath, '--judge', kind],
+      { cwd: plopRoot, env: harnessEnv(envOverrides) }
+    )
+    child.stderr.on('data', (buf) => onLog(buf.toString()))
+    child.on('close', () => resolve())
+    child.on('error', (err) => {
+      onLog(`judge error (advisory, ignored): ${err}\n`)
+      resolve()
     })
   })
 }
@@ -259,6 +311,9 @@ async function executeJob(job) {
         job.finishedAt = Date.now()
         return
       }
+      if (job.judge && job.judge !== 'off') {
+        await runJudge(label, job.judge, log, job.envOverrides || {})
+      }
     }
 
     job.status = 'done'
@@ -304,6 +359,7 @@ async function handlePostRun(req, res) {
     defended: !!body.defended,
     backend: body.backend || 'naive',
     model: body.model || 'claude-sonnet-5',
+    judge: normalizeJudge(body.judge),
     profilePath: null,
     envOverrides: pastedKey ? { ANTHROPIC_API_KEY: pastedKey } : {},
     log: '',

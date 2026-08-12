@@ -3,6 +3,12 @@ import { describeSetup } from '@/lib/format'
 
 export type RunMode = 'conformance' | 'capability' | 'builtin'
 
+/** One entry in a capability agent's real tool inventory. */
+export type ToolSpec = { name: string; kinds: string[] }
+
+/** The advisory judge to run after scoring. Never changes the number. */
+export type JudgeKind = 'off' | 'rule' | 'anthropic'
+
 export type RunRequest = {
   mode: RunMode
   label: string
@@ -15,6 +21,11 @@ export type RunRequest = {
   url?: string
   command?: string
   capabilities?: string[]
+  /** The agent's real tools, each mapped to the kinds it provides. Binds
+   *  abstract attacks to your tool names; supersedes `capabilities`. */
+  tools?: ToolSpec[]
+  /** An advisory second opinion, annotated after the score is written. */
+  judge?: JudgeKind
   /** Live API key — never logged; optional if already saved. */
   api_key?: string
   /** Persist api_key on this machine (default true when provided). */
