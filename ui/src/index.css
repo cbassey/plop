@@ -6,6 +6,13 @@
 
 @layer base {
   :root {
+    /* The three families loaded above, under the names the Tailwind
+       preset expects. A bare fallback after var() does not save you:
+       an undefined custom property voids the whole declaration. */
+    --font-archivo: 'Archivo';
+    --font-plex-sans: 'IBM Plex Sans';
+    --font-plex-mono: 'IBM Plex Mono';
+
     /* Rams-adjacent: near-black canvas, white type, gray secondary. No chroma. */
     --background: 0 0% 2%;
     --foreground: 0 0% 100%;
