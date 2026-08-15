@@ -78,6 +78,9 @@ export function NewRunView({
     'reads_untrusted_content',
     'has_write_tool',
   ])
+  const [tools, setTools] = useState<{ name: string; kinds: string[] }[]>([])
+  const [showTools, setShowTools] = useState(false)
+  const [judge, setJudge] = useState<'off' | 'rule' | 'anthropic'>('off')
   const [job, setJob] = useState<Job | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
@@ -86,6 +89,8 @@ export function NewRunView({
   const mode = PATHS.find((p) => p.id === path)!.mode
   const activePath = PATHS.find((p) => p.id === path)!
   const keyConfigured = Boolean(secrets?.anthropic.configured)
+  // The hosted service keeps no key. It takes one per run and forgets it.
+  const canStoreKey = secrets?.storage !== 'none'
 
   useEffect(() => {
     void fetchSecrets()
@@ -169,6 +174,10 @@ export function NewRunView({
       setError('Paste the new API key, or cancel replace.')
       return
     }
+    const namedTools = tools
+      .map((t) => ({ name: t.name.trim(), kinds: t.kinds }))
+      .filter((t) => t.name)
+    const toolSignal = namedTools.some((t) => t.kinds.length > 0)
     if (path === 'agent') {
       if (adapter === 'http' && !url.trim()) {
         setError('Add the HTTP endpoint for your agent.')
@@ -178,10 +187,18 @@ export function NewRunView({
         setError('Add the shell command for your agent.')
         return
       }
-      if (caps.length === 0) {
-        setError('Pick at least one tool capability, or attacks will all skip.')
+      if (caps.length === 0 && !toolSignal) {
+        setError(
+          'Pick a capability or add a tool with a kind, or attacks will all skip.'
+        )
         return
       }
+    }
+    if (judge === 'anthropic' && !keyConfigured && !apiKey.trim()) {
+      setError(
+        'The live judge needs an API key. Add one on “Score my prompt” → Model options, or pick the offline judge.'
+      )
+      return
     }
 
     setBusy(true)
@@ -201,15 +218,17 @@ export function NewRunView({
       const pasted = apiKey.trim()
       if (pasted) {
         body.api_key = pasted
-        body.save_api_key = saveApiKey
+        body.save_api_key = canStoreKey && saveApiKey
       }
     }
     if (mode === 'capability') {
       body.adapter = adapter
       body.capabilities = caps
+      if (namedTools.length) body.tools = namedTools
       if (adapter === 'http') body.url = url
       if (adapter === 'command') body.command = command
     }
+    if (judge !== 'off') body.judge = judge
 
     try {
       const started = await startRun(body)
@@ -248,6 +267,33 @@ export function NewRunView({
   function toggleCap(id: string) {
     setCaps((prev) =>
       prev.includes(id) ? prev.filter((c) => c !== id) : [...prev, id]
+    )
+  }
+
+  function addTool() {
+    setTools((prev) => [...prev, { name: '', kinds: [] }])
+  }
+
+  function removeTool(idx: number) {
+    setTools((prev) => prev.filter((_, i) => i !== idx))
+  }
+
+  function setToolName(idx: number, name: string) {
+    setTools((prev) => prev.map((t, i) => (i === idx ? { ...t, name } : t)))
+  }
+
+  function toggleToolKind(idx: number, kind: string) {
+    setTools((prev) =>
+      prev.map((t, i) =>
+        i === idx
+          ? {
+              ...t,
+              kinds: t.kinds.includes(kind)
+                ? t.kinds.filter((k) => k !== kind)
+                : [...t.kinds, kind],
+            }
+          : t
+      )
     )
   }
 
@@ -389,11 +435,22 @@ export function NewRunView({
                               API key
                             </p>
                             <p className="mt-1 text-[12px] text-muted-foreground">
-                              Saved on this machine in{' '}
-                              <code className="text-[11px]">
-                                .secrets.json
-                              </code>
-                              . Never shown in full after save. Not committed.
+                              {canStoreKey ? (
+                                <>
+                                  Saved on this machine in{' '}
+                                  <code className="text-[11px]">
+                                    .secrets.json
+                                  </code>
+                                  . Never shown in full after save. Not
+                                  committed.
+                                </>
+                              ) : (
+                                <>
+                                  Your key, your budget. It is used for this
+                                  run and then dropped. Nothing writes it to
+                                  disk, and nothing logs it.
+                                </>
+                              )}
                             </p>
                           </div>
                           {keyConfigured && !replaceKey && (
@@ -451,17 +508,19 @@ export function NewRunView({
                                 className="h-10 bg-background font-mono text-[13px]"
                               />
                             </Field>
-                            <label className="flex cursor-pointer items-center gap-2 text-[13px] text-muted-foreground">
-                              <input
-                                type="checkbox"
-                                checked={saveApiKey}
-                                onChange={(e) =>
-                                  setSaveApiKey(e.target.checked)
-                                }
-                                className="h-3.5 w-3.5 rounded-sm border-border"
-                              />
-                              Save for future runs on this machine
-                            </label>
+                            {canStoreKey && (
+                              <label className="flex cursor-pointer items-center gap-2 text-[13px] text-muted-foreground">
+                                <input
+                                  type="checkbox"
+                                  checked={saveApiKey}
+                                  onChange={(e) =>
+                                    setSaveApiKey(e.target.checked)
+                                  }
+                                  className="h-3.5 w-3.5 rounded-sm border-border"
+                                />
+                                Save for future runs on this machine
+                              </label>
+                            )}
                             {replaceKey && (
                               <Button
                                 type="button"
@@ -616,8 +675,102 @@ export function NewRunView({
                   })}
                 </div>
               </div>
+
+              <div className="space-y-3">
+                <Button
+                  type="button"
+                  variant="link"
+                  className="h-auto self-start px-0 text-muted-foreground"
+                  onClick={() => setShowTools((v) => !v)}
+                >
+                  {showTools
+                    ? 'Hide tool list'
+                    : 'List individual tools (precise)'}
+                </Button>
+                {showTools && (
+                  <div className="space-y-3">
+                    <p className="text-[12px] leading-relaxed text-muted-foreground">
+                      Name each tool and mark what it does. This binds attacks to
+                      your real tool names — a “coerce a write” case then forbids
+                      your write tools by name. Supersedes the checkboxes above.
+                    </p>
+                    {tools.map((t, i) => (
+                      <div
+                        key={i}
+                        className="space-y-3 rounded-md border border-border p-3"
+                      >
+                        <div className="flex items-center gap-2">
+                          <Input
+                            value={t.name}
+                            onChange={(e) => setToolName(i, e.target.value)}
+                            placeholder="create_invoice"
+                            className="h-9 bg-background font-mono text-[13px]"
+                          />
+                          <Button
+                            type="button"
+                            variant="link"
+                            className="h-auto px-0 text-muted-foreground"
+                            onClick={() => removeTool(i)}
+                          >
+                            Remove
+                          </Button>
+                        </div>
+                        <div className="flex flex-wrap gap-2">
+                          {CAPABILITY_OPTIONS.map((c) => {
+                            const on = t.kinds.includes(c.id)
+                            return (
+                              <button
+                                key={c.id}
+                                type="button"
+                                onClick={() => toggleToolKind(i, c.id)}
+                                className={cn(
+                                  'rounded-md border px-2.5 py-1 text-[12px] transition-colors',
+                                  on
+                                    ? 'border-foreground bg-foreground text-background'
+                                    : 'border-border text-muted-foreground hover:border-foreground/30'
+                                )}
+                              >
+                                {c.label}
+                              </button>
+                            )
+                          })}
+                        </div>
+                      </div>
+                    ))}
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      onClick={addTool}
+                    >
+                      Add tool
+                    </Button>
+                  </div>
+                )}
+              </div>
             </>
           )}
+
+          <Field
+            label="Advisory judge"
+            hint="never changes the score"
+            htmlFor="judge-kind"
+          >
+            <Select value={judge} onValueChange={(v) => setJudge(v as typeof judge)}>
+              <SelectTrigger id="judge-kind" className="h-10 bg-background">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="off">Off</SelectItem>
+                <SelectItem value="rule">
+                  Offline · narrates each verdict
+                </SelectItem>
+                <SelectItem value="anthropic">
+                  Live model · a real second opinion
+                </SelectItem>
+              </SelectContent>
+            </Select>
+          </Field>
 
           {error && (
             <Alert variant="destructive">

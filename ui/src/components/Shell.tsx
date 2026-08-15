@@ -1,4 +1,5 @@
 import type { ReactNode } from 'react'
+import { BrandLockup, PlopMark } from '@cbassey/ui-kit/brand'
 import { Button } from '@/components/ui/button'
 import { Label } from '@/components/ui/label'
 import { cn } from '@/lib/utils'
@@ -16,9 +17,7 @@ export function Shell({
     <div className="min-h-screen">
       <header className="sticky top-0 z-20 border-b border-border/80 bg-background/85 backdrop-blur-md">
         <div className="mx-auto flex h-14 max-w-6xl items-center gap-8 px-5 sm:px-8">
-          <span className="font-display text-[15px] font-semibold tracking-tight">
-            plop
-          </span>
+          <BrandLockup mark={PlopMark} name="plop" />
           <nav className="flex flex-1 items-center gap-1">{nav}</nav>
           {action}
         </div>

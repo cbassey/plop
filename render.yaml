@@ -1,0 +1,25 @@
+services:
+  - type: web
+    name: plop-api
+    runtime: python
+    # The build runs from the repo root, because the API imports the same
+    # plop package the CLI runs.
+    plan: free
+    buildCommand: pip install -e ".[anthropic]" && pip install -e ./api
+    startCommand: uvicorn plop_api.main:app --host 0.0.0.0 --port $PORT
+    healthCheckPath: /api/health
+    envVars:
+      # Hosted mode: the service stores no API key, and it gives each
+      # visitor a folder of their own for the runs they start.
+      - key: PLOP_HOSTED
+        value: "1"
+      - key: PLOP_RUNS_DIR
+        value: /tmp/plop-runs
+      # The Vercel URL of plop/ui, as a comma-separated list.
+      - key: ALLOWED_ORIGINS
+        sync: false
+      # A small host runs few suites at once. Raise it with the plan.
+      - key: PLOP_MAX_CONCURRENT_RUNS
+        value: "2"
+    # Never set ANTHROPIC_API_KEY here. Each visitor sends their own key
+    # with each run, and the service drops it when the run ends.

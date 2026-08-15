@@ -47,6 +47,28 @@ import sys
 from .runner import run_suite
 
 
+def _emit(summary: dict) -> None:
+    """Print the summary JSON, then a loud note about any coverage gap.
+
+    Unverifiable cases (a check plop could not evaluate, for example a leak
+    check against an agent that never exposes its prompt) are left out of the
+    defense rate. Say so, so the number is never read as full coverage.
+    """
+    json.dump(summary, sys.stdout, indent=2)
+    sys.stdout.write("\n")
+    unverifiable = summary.get("unverifiable", 0)
+    if unverifiable:
+        ids = ", ".join(c["case_id"] for c in summary.get("unverifiable_cases", []))
+        print(
+            f"\nNOTE: {unverifiable} case(s) are UNVERIFIABLE and are excluded "
+            f"from the defense rate of {summary['defense_rate']} "
+            f"({summary['passed']}/{summary['total']}). "
+            f"plop could not evaluate a check for: {ids}. "
+            f"Declare 'canaries' in the profile to make leak checks verifiable.",
+            file=sys.stderr,
+        )
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description="Run the plop adversarial suite.")
     parser.add_argument("--label", required=True, help="A short label for the run.")
@@ -90,7 +112,16 @@ def main(argv: list[str] | None = None) -> int:
         default="claude-sonnet-5",
         help="The model id for the anthropic backend.",
     )
+    parser.add_argument(
+        "--results-dir",
+        help="The folder for the output files. It defaults to plop/results. "
+        "The hosted API gives each visitor a folder of their own.",
+    )
     args = parser.parse_args(argv)
+
+    # Only send the argument when the user gives one, so the runner keeps
+    # its own default.
+    where = {"results_dir": args.results_dir} if args.results_dir else {}
 
     adapter = None
     backend = None
@@ -101,15 +132,19 @@ def main(argv: list[str] | None = None) -> int:
         from plop.conformance import AgentProfile, build_profile_run
 
         profile = AgentProfile.load(args.profile)
-        adapter, provided_capabilities = build_profile_run(profile, args.label)
+        adapter, provided_capabilities, tool_binding = build_profile_run(
+            profile, args.label
+        )
         summary = run_suite(
             run_label=args.label,
             defended=args.defended,
             adapter=adapter,
             provided_capabilities=provided_capabilities,
+            canaries=profile.canaries,
+            tool_binding=tool_binding,
+            **where,
         )
-        json.dump(summary, sys.stdout, indent=2)
-        sys.stdout.write("\n")
+        _emit(summary)
         return 0
 
     if args.adapter == "http":
@@ -145,10 +180,10 @@ def main(argv: list[str] | None = None) -> int:
         backend=backend,
         backend_factory=backend_factory,
         model=args.model,
+        **where,
     )
 
-    json.dump(summary, sys.stdout, indent=2)
-    sys.stdout.write("\n")
+    _emit(summary)
     return 0
 
 

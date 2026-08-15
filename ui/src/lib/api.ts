@@ -3,6 +3,12 @@ import { describeSetup } from '@/lib/format'
 
 export type RunMode = 'conformance' | 'capability' | 'builtin'
 
+/** One entry in a capability agent's real tool inventory. */
+export type ToolSpec = { name: string; kinds: string[] }
+
+/** The advisory judge to run after scoring. Never changes the number. */
+export type JudgeKind = 'off' | 'rule' | 'anthropic'
+
 export type RunRequest = {
   mode: RunMode
   label: string
@@ -15,6 +21,11 @@ export type RunRequest = {
   url?: string
   command?: string
   capabilities?: string[]
+  /** The agent's real tools, each mapped to the kinds it provides. Binds
+   *  abstract attacks to your tool names; supersedes `capabilities`. */
+  tools?: ToolSpec[]
+  /** An advisory second opinion, annotated after the score is written. */
+  judge?: JudgeKind
   /** Live API key — never logged; optional if already saved. */
   api_key?: string
   /** Persist api_key on this machine (default true when provided). */
@@ -26,6 +37,9 @@ export type SecretsStatus = {
     configured: boolean
     hint: string | null
   }
+  /** 'file' — the local service can keep the key in plop/.secrets.json.
+   *  'none' — the hosted service stores nothing. Send the key per run. */
+  storage?: 'file' | 'none'
 }
 
 export type Job = {
@@ -41,6 +55,34 @@ export type Job = {
   finishedAt: number | null
 }
 
+/** Where the API lives. Empty in dev, where Vite proxies /api to uvicorn. */
+const API_BASE = (import.meta.env.VITE_PLOP_API_URL || '').replace(/\/$/, '')
+
+const SESSION_STORAGE_KEY = 'plop.session'
+
+/** A random id that separates this browser's runs from everybody else's.
+ *  It is not a login. It grants nothing, and the server checks nothing. */
+function sessionId(): string {
+  if (typeof localStorage === 'undefined') return 'anon'
+  let id = localStorage.getItem(SESSION_STORAGE_KEY)
+  if (!id) {
+    id = crypto.randomUUID()
+    localStorage.setItem(SESSION_STORAGE_KEY, id)
+  }
+  return id
+}
+
+function call(path: string, init: RequestInit = {}): Promise<Response> {
+  return fetch(`${API_BASE}${path}`, {
+    ...init,
+    headers: {
+      ...(init.body ? { 'Content-Type': 'application/json' } : {}),
+      'X-Plop-Session': sessionId(),
+      ...(init.headers || {}),
+    },
+  })
+}
+
 async function parse<T>(res: Response): Promise<T> {
   const data = await res.json()
   if (!res.ok) {
@@ -53,7 +95,7 @@ async function parse<T>(res: Response): Promise<T> {
 
 export async function fetchResults(): Promise<ResultsFile> {
   try {
-    return await parse<ResultsFile>(await fetch('/api/results'))
+    return await parse<ResultsFile>(await call('/api/results'))
   } catch {
     const mod = await import('@/results.json')
     return mod.default as ResultsFile
@@ -62,16 +104,15 @@ export async function fetchResults(): Promise<ResultsFile> {
 
 export async function startRun(body: RunRequest): Promise<Job> {
   return parse<Job>(
-    await fetch('/api/runs', {
+    await call('/api/runs', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(body),
     })
   )
 }
 
 export async function fetchJob(id: string): Promise<Job> {
-  return parse<Job>(await fetch(`/api/jobs/${id}`))
+  return parse<Job>(await call(`/api/jobs/${id}`))
 }
 
 export async function deleteStudy(name: string): Promise<{
@@ -80,21 +121,20 @@ export async function deleteStudy(name: string): Promise<{
   studies?: Study[]
 }> {
   return parse(
-    await fetch(`/api/studies/${encodeURIComponent(name)}`, {
+    await call(`/api/studies/${encodeURIComponent(name)}`, {
       method: 'DELETE',
     })
   )
 }
 
 export async function fetchSecrets(): Promise<SecretsStatus> {
-  return parse<SecretsStatus>(await fetch('/api/secrets'))
+  return parse<SecretsStatus>(await call('/api/secrets'))
 }
 
 export async function saveAnthropicKey(key: string): Promise<SecretsStatus> {
   return parse<SecretsStatus>(
-    await fetch('/api/secrets', {
+    await call('/api/secrets', {
       method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ anthropic_api_key: key }),
     })
   )
@@ -102,7 +142,7 @@ export async function saveAnthropicKey(key: string): Promise<SecretsStatus> {
 
 export async function deleteAnthropicKey(): Promise<SecretsStatus> {
   return parse<SecretsStatus>(
-    await fetch('/api/secrets/anthropic', { method: 'DELETE' })
+    await call('/api/secrets/anthropic', { method: 'DELETE' })
   )
 }
 

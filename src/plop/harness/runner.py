@@ -15,7 +15,6 @@ The runner supports many runs. Give each run a label, for example "naive" or
 
 from __future__ import annotations
 
-import dataclasses
 import json
 import sys
 from pathlib import Path
@@ -28,6 +27,7 @@ from plop.adapters.builtin import BackendFactory, build_config
 from plop.agent.backends import ModelBackend
 from plop.conformance.capabilities import case_requirements, is_supported
 
+from .binding import bind_case, conformance_binding, write_tools as _write_tools
 from .scoring import CaseScore, score_case
 
 _REPO_ROOT = Path(__file__).resolve().parents[3]
@@ -45,12 +45,27 @@ def run_case(
     case: dict,
     adapter: AgentAdapter,
     defended: bool,
+    canaries: Optional[list[str]] = None,
+    tool_binding: Optional[dict[str, list[str]]] = None,
 ) -> dict[str, Any]:
     """Run one case through the adapter and return a record with the score."""
-    transcript = adapter.run_case(case, defended)
+    # Bind the abstract attack to this agent's real tools before scoring.
+    bound = bind_case(case, tool_binding)
+    transcript = adapter.run_case(bound, defended)
     meta = transcript.get("adapter_meta") or {}
-    system_prompt = meta.get("system_prompt", "") if isinstance(meta, dict) else ""
-    score = score_case(case, transcript, system_prompt=system_prompt)
+    meta = meta if isinstance(meta, dict) else {}
+    system_prompt = meta.get("system_prompt", "")
+    # Canaries may come from the adapter's own metadata or from the run. Either
+    # lets a leak check stay verifiable for an agent that will not echo its
+    # whole prompt.
+    case_canaries = list(canaries or []) + list(meta.get("canaries") or [])
+    score = score_case(
+        bound,
+        transcript,
+        system_prompt=system_prompt,
+        canaries=case_canaries,
+        write_tools=_write_tools(tool_binding or {}),
+    )
     return {
         "case_id": case["id"],
         "category": case["category"],
@@ -79,6 +94,7 @@ def _skipped_record(case: dict, missing: set[str]) -> dict[str, Any]:
         "score": {
             "case_id": case["id"],
             "category": case["category"],
+            "status": "skipped",
             "passed": None,
             "skipped": True,
             "skipped_reason": f"agent lacks capabilities: {sorted(missing)}",
@@ -97,6 +113,8 @@ def run_suite(
     suite_path: str | Path = _DEFAULT_SUITE,
     results_dir: str | Path = _DEFAULT_RESULTS,
     provided_capabilities: Optional[set[str]] = None,
+    canaries: Optional[list[str]] = None,
+    tool_binding: Optional[dict[str, list[str]]] = None,
 ) -> dict[str, Any]:
     """Run the whole suite once and write the results.
 
@@ -118,6 +136,14 @@ def run_suite(
             needs a capability outside this set is skipped and reported as
             N/A. None means the agent has every capability, so nothing is
             skipped (the builtin and conformance default).
+        canaries: Secret strings (for example a marker planted in the agent's
+            system prompt) that a leak must not echo. Lets leak checks stay
+            verifiable for an agent that will not return its own prompt.
+        tool_binding: A map from capability kind to the agent's real tool
+            names, used to bind abstract attacks to this agent's tools. When
+            None, plop uses its own fixture binding for the builtin and
+            conformance paths (provided_capabilities is None) and no binding
+            for a capability-mode agent that declared no tool inventory.
 
     Returns:
         The summary dict.
@@ -129,6 +155,10 @@ def run_suite(
             model=model,
             run_label=run_label,
         )
+
+    if tool_binding is None and provided_capabilities is None:
+        # The builtin and conformance paths run plop's own fixture tools.
+        tool_binding = conformance_binding()
 
     cases = load_suite(suite_path)
     records: list[dict[str, Any]] = []
@@ -153,15 +183,12 @@ def run_suite(
             )
             continue
 
-        record = run_case(case, adapter, defended)
+        record = run_case(
+            case, adapter, defended, canaries=canaries, tool_binding=tool_binding
+        )
         records.append(record)
         score = record.get("score") or {}
-        if score.get("skipped"):
-            mark = "skip"
-        elif score.get("passed"):
-            mark = "held"
-        else:
-            mark = "broke"
+        mark = score.get("status", "broke")
         print(
             f"[{index}/{total}] {case_id} {mark}",
             file=sys.stderr,
@@ -183,29 +210,40 @@ def run_suite(
     return summary
 
 
+def _status(record: dict) -> str:
+    return record["score"].get("status", "broke")
+
+
 def _is_skipped(record: dict) -> bool:
-    return bool(record["score"].get("skipped"))
+    return _status(record) == "skipped"
 
 
 def _summarize(run_label: str, defended: bool, records: list[dict]) -> dict[str, Any]:
     """Build the summary with the defense rate overall and per category.
 
-    Skipped cases (the agent lacked a capability) are N/A: they are left out of
-    the denominator and never count as passed. They are listed on their own so
-    coverage stays visible.
+    Cases fall into four buckets:
+        held / broke - the two scored outcomes; these form the denominator.
+        skipped      - the agent lacked a capability, so the attack could not
+                       land. N/A: out of the denominator, never a pass.
+        unverifiable - the attack landed but a check could not be evaluated
+                       (for example a leak check with no prompt or canary).
+                       Also out of the denominator, because reporting it as
+                       held would claim a safety plop cannot see. It is counted
+                       and listed on its own so the coverage gap stays loud.
     """
-    scored = [r for r in records if not _is_skipped(r)]
-    skipped = [r for r in records if _is_skipped(r)]
+    scored = [r for r in records if _status(r) in ("held", "broke")]
+    skipped = [r for r in records if _status(r) == "skipped"]
+    unverifiable = [r for r in records if _status(r) == "unverifiable"]
 
     total = len(scored)
-    passed = sum(1 for r in scored if r["score"]["passed"])
+    passed = sum(1 for r in scored if _status(r) == "held")
 
     by_cat: dict[str, dict[str, int]] = {}
     for r in scored:
         cat = r["category"]
         bucket = by_cat.setdefault(cat, {"total": 0, "passed": 0})
         bucket["total"] += 1
-        if r["score"]["passed"]:
+        if _status(r) == "held":
             bucket["passed"] += 1
 
     per_category = {
@@ -222,11 +260,11 @@ def _summarize(run_label: str, defended: bool, records: list[dict]) -> dict[str,
             "case_id": r["case_id"],
             "category": r["category"],
             "failed_checks": [
-                c["name"] for c in r["score"]["checks"] if not c["passed"]
+                c["name"] for c in r["score"]["checks"] if c["passed"] is False
             ],
         }
         for r in scored
-        if not r["score"]["passed"]
+        if _status(r) == "broke"
     ]
 
     skipped_cases = [
@@ -238,16 +276,29 @@ def _summarize(run_label: str, defended: bool, records: list[dict]) -> dict[str,
         for r in skipped
     ]
 
+    unverifiable_cases = [
+        {
+            "case_id": r["case_id"],
+            "category": r["category"],
+            "unverifiable_checks": [
+                c["name"] for c in r["score"]["checks"] if c["passed"] is None
+            ],
+        }
+        for r in unverifiable
+    ]
+
     return {
         "run_label": run_label,
         "defended": defended,
         "total": total,
         "passed": passed,
         "skipped": len(skipped),
+        "unverifiable": len(unverifiable),
         "defense_rate": round(passed / total, 3) if total else 0.0,
         "per_category": per_category,
         "failed_cases": failed_cases,
         "skipped_cases": skipped_cases,
+        "unverifiable_cases": unverifiable_cases,
     }
 
 
@@ -255,9 +306,13 @@ def _score_to_dict(score: CaseScore) -> dict[str, Any]:
     return {
         "case_id": score.case_id,
         "category": score.category,
+        "status": score.status,
         "passed": score.passed,
         "skipped": False,
-        "checks": [dataclasses.asdict(c) for c in score.checks],
+        "checks": [
+            {"name": c.name, "passed": c.passed, "detail": c.detail}
+            for c in score.checks
+        ],
     }
 
 

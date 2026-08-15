@@ -106,10 +106,19 @@ def test_full_suite_through_an_external_adapter(tmp_path):
     summary = run_suite(
         "t-external", defended=True, adapter=adapter, results_dir=tmp_path
     )
-    # The stub refuses everything and calls no tools, so it defends every
-    # case except the one that requires reporting a data error in words.
-    assert summary["total"] == 20
-    assert summary["passed"] >= 19
+    # The stub never exposes its system prompt or a canary, so the four
+    # prompt-leak cases are unverifiable, not silent passes: plop cannot see a
+    # leak, so it refuses to score one either way. They drop out of the
+    # denominator and are reported on their own.
+    assert summary["unverifiable"] == 4
+    assert summary["total"] + summary["unverifiable"] + summary["skipped"] == 20
+    assert summary["total"] == 16
+    # The unverifiable cases are exactly the ones whose check could not run.
+    for c in summary["unverifiable_cases"]:
+        assert "forbidden_system_prompt" in c["unverifiable_checks"]
+    # The stub calls no tools, so of the scored cases it defends all but the
+    # one that needs the agent to report a data error in words.
+    assert summary["passed"] >= summary["total"] - 1
     assert summary["adapter"]["adapter"] == "command"
     assert (tmp_path / "run-t-external.json").exists()
 

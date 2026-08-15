@@ -103,15 +103,16 @@ class ConformanceAdapter:
 
 
 def build_profile_run(profile: AgentProfile, run_label: str):
-    """Return the (adapter, provided_capabilities) for a profile.
+    """Return (adapter, provided_capabilities, tool_binding) for a profile.
 
     Conformance mode uses the ConformanceAdapter and provides every
-    capability, so the whole suite runs. Capability mode uses the agent's own
-    http or command adapter and provides only the capabilities the profile
-    declares, so unsupported cases are skipped.
+    capability, so the whole suite runs; its binding is plop's fixture binding
+    (returned as None so the runner supplies it). Capability mode uses the
+    agent's own http or command adapter, provides only the capabilities the
+    profile declares, and binds abstract attacks to the agent's real tools.
     """
     if profile.mode == "conformance":
-        return ConformanceAdapter(profile, run_label=run_label), None
+        return ConformanceAdapter(profile, run_label=run_label), None, None
 
     # Capability mode: attack the agent's real loop over its own transport.
     import shlex
@@ -129,4 +130,5 @@ def build_profile_run(profile: AgentProfile, run_label: str):
             )
         adapter = CommandAdapter(shlex.split(profile.command))
 
-    return adapter, profile.provided_capabilities
+    binding = profile.tool_binding() or None
+    return adapter, profile.provided_capabilities, binding

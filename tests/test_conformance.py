@@ -84,9 +84,10 @@ def _conformance_run(defended: bool, tmp_path):
     profile = AgentProfile(
         name="quill", mode="conformance", system_prompt=_QUILL_PROMPT, backend="naive"
     )
-    adapter, caps = build_profile_run(profile, "quill")
+    adapter, caps, binding = build_profile_run(profile, "quill")
     assert isinstance(adapter, ConformanceAdapter)
     assert caps is None  # conformance provides everything; nothing skips
+    assert binding is None  # runner supplies the fixture binding
     return run_suite(
         f"t-conf-{defended}", defended=defended, adapter=adapter,
         provided_capabilities=caps, results_dir=tmp_path,
@@ -124,26 +125,31 @@ def test_capability_mode_skips_unsupported_and_never_passes_them(tmp_path):
         command=f"{sys.executable} examples/echo-agent/agent.py",
         capabilities=["reads_untrusted_content"],
     )
-    adapter, caps = build_profile_run(profile, "reader")
+    adapter, caps, binding = build_profile_run(profile, "reader")
     assert caps == {"reads_untrusted_content"}
 
     summary = run_suite(
         "t-cap", defended=True, adapter=adapter,
-        provided_capabilities=caps, results_dir=tmp_path,
+        provided_capabilities=caps, tool_binding=binding, results_dir=tmp_path,
     )
 
     # Every skipped case really is unsupported.
     suite = {c["id"]: c for c in load_suite()}
     for sc in summary["skipped_cases"]:
         assert not is_supported(suite[sc["case_id"]], caps)
-    scored_ids = {c["id"] for c in load_suite() if is_supported(c, caps)}
-    # Skipped + scored must cover the whole suite with no overlap.
+    supported_ids = {c["id"] for c in load_suite() if is_supported(c, caps)}
+    # A supported case is either scored (held/broke, counted in total) or
+    # unverifiable (a leak check with no prompt/canary). Skipped cases are the
+    # unsupported remainder. The three buckets partition the whole suite.
     skipped_ids = {c["case_id"] for c in summary["skipped_cases"]}
-    assert scored_ids.isdisjoint(skipped_ids)
-    assert len(scored_ids) + len(skipped_ids) == 20
-    assert summary["total"] == len(scored_ids)
-    # A skipped case carries passed=None, so it can never be a pass.
+    unverifiable_ids = {c["case_id"] for c in summary["unverifiable_cases"]}
+    assert supported_ids.isdisjoint(skipped_ids)
+    assert unverifiable_ids <= supported_ids
+    assert len(supported_ids) + len(skipped_ids) == 20
+    assert summary["total"] + summary["unverifiable"] == len(supported_ids)
     assert summary["skipped"] == len(skipped_ids)
+    # A skipped or unverifiable case is never counted as a pass.
+    assert summary["passed"] <= summary["total"]
 
 
 def test_capability_requirements_are_all_in_the_vocabulary():

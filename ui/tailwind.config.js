@@ -1,13 +1,19 @@
 /** @type {import('tailwindcss').Config} */
 export default {
   darkMode: ['class'],
-  content: ['./index.html', './src/**/*.{ts,tsx}'],
+  content: [
+    './index.html',
+    './src/**/*.{ts,tsx}',
+    './node_modules/@cbassey/ui-kit/dist/**/*.js',
+  ],
   theme: {
     extend: {
+      // Same shape as @cbassey/ui-kit's preset. The variables are defined
+      // in src/index.css; see the font recipe in ui-kit/DESIGN.md.
       fontFamily: {
-        display: ['Archivo', 'sans-serif'],
-        mono: ['"IBM Plex Mono"', 'monospace'],
-        sans: ['"IBM Plex Sans"', 'sans-serif'],
+        display: ['var(--font-archivo)', 'Archivo', 'sans-serif'],
+        mono: ['var(--font-plex-mono)', '"IBM Plex Mono"', 'monospace'],
+        sans: ['var(--font-plex-sans)', '"IBM Plex Sans"', 'sans-serif'],
       },
       colors: {
         border: 'hsl(var(--border))',

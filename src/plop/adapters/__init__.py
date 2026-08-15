@@ -20,12 +20,28 @@ from .base import AgentAdapter, case_payload, normalize_transcript
 from .builtin import BuiltinAdapter, build_config
 from .command import CommandAdapter
 from .http import HttpAdapter
+from .mcp_proxy import (
+    AgentResult,
+    AgentRunner,
+    Injection,
+    McpProxyAdapter,
+    ToolResponse,
+    ToolSession,
+    ToolTransport,
+)
 
 __all__ = [
     "AgentAdapter",
     "BuiltinAdapter",
     "HttpAdapter",
     "CommandAdapter",
+    "McpProxyAdapter",
+    "ToolTransport",
+    "ToolSession",
+    "ToolResponse",
+    "AgentRunner",
+    "AgentResult",
+    "Injection",
     "case_payload",
     "normalize_transcript",
     "build_config",

@@ -114,15 +114,34 @@ python -m plop.harness --label mine --adapter http    --url http://localhost:300
 python -m plop.harness --label mine --adapter command --command "node run-agent.js"
 ```
 
-### Dashboard (UI)
+### Dashboard (UI + API)
 
 ```bash
-cd ui && npm install && npm run dev
+pip install -e "./api[dev]"
+cd ui && npm install && npm run dev:all
 # http://localhost:5173 — Run studies from the browser, then read Results.
 ```
 
-The UI starts a local API that shells out to `python -m plop.harness`. See
-[ui/README.md](ui/README.md).
+The dashboard is two parts. `api/` is a FastAPI service that starts
+`python -m plop.harness` as a child process, so the browser and the CLI
+score the same way. `ui/` is the Vite app that talks to it. See
+[ui/README.md](ui/README.md) and [api/README.md](api/README.md).
+
+### Deploy
+
+`render.yaml` puts the API on Render. `ui/vercel.json` puts the dashboard
+on Vercel. Two variables tie them together:
+
+| Where | Variable | Value |
+| --- | --- | --- |
+| Vercel | `VITE_PLOP_API_URL` | The Render URL of the API |
+| Render | `ALLOWED_ORIGINS` | The Vercel URL of the dashboard |
+
+A hosted deployment runs with `PLOP_HOSTED=1`. It stores no API key: each
+visitor sends their own key with each run, the run holds it in memory, and
+the service drops it when the run ends. The session id in the browser
+separates one visitor's runs from another's. It is not a login, so add
+real accounts before you put private prompts on a public deployment.
 
 Each run writes two files to `results/`:
 
@@ -398,6 +417,8 @@ profiles/       Agent profiles (quill.json, example-capability.json).
 results/        The run outputs.
 examples/       Adapter examples: echo-agent (command), quill (HTTP).
 docs/           The mode guide, the adapter contract, and decision records.
+api/            The FastAPI service the dashboard calls. Starts the harness.
+ui/             The dashboard (Vite + React). Static build, any host.
 ```
 
 The agent loop is in `src/plop/agent/loop.py`. It is small on purpose. Read it
