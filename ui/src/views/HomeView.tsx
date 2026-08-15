@@ -21,7 +21,7 @@ const PATHS = [
   {
     title: 'Score my prompt',
     detail:
-      "Paste a system prompt. Plop runs its own agent loop and tools. This tests the prompt and model — not your product's real tools.",
+      "Paste a system prompt. Plop runs its own agent loop and tools. This tests the prompt and model — not your product's real tools. Offline by default; live scoring needs your own Anthropic API key.",
   },
   {
     title: 'Score a live agent',
