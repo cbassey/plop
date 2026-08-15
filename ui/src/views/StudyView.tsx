@@ -4,6 +4,7 @@ import { Meter } from '@/components/Meter'
 import { CategoryBreakdown } from '@/components/CategoryBreakdown'
 import { CaseList } from '@/components/CaseList'
 import { Glossary } from '@/components/Glossary'
+import { ReviewerPanel } from '@/components/ReviewerPanel'
 import { PageHeader } from '@/components/Shell'
 import { adapterLabel, deleteStudy } from '@/lib/api'
 import { pct } from '@/lib/format'
@@ -158,6 +159,10 @@ export function StudyView({
               defended={defended}
               compact
             />
+            <ReviewerPanel
+              study={study}
+              onSeeAttacks={() => setPane('cases')}
+            />
             <footer className="border-t border-border pt-5 text-[13px] text-muted-foreground">
               {(defended ?? naive)?.total ?? 0} attacks ·{' '}
               <span className="text-foreground">
@@ -185,7 +190,7 @@ export function StudyView({
           <div>
             <p className="mb-4 max-w-xl text-[14px] leading-relaxed text-muted-foreground">
               Open a row for the full trace — what we asked, what safe looks
-              like, and open vs defended.
+              like, open vs defended, and the reviewer note when one ran.
             </p>
             <CaseList naive={study.naive} defended={study.defended} />
           </div>

@@ -24,6 +24,26 @@ export type Score = {
   checks: Check[]
 }
 
+export type Judgment = {
+  verdict: 'agree' | 'disagree' | 'unsure' | string
+  rationale: string
+  confidence: number
+  advisory: boolean
+}
+
+export type JudgeDisagreement = {
+  case_id: string
+  category: string
+  hard_check_status: string
+  rationale: string
+  confidence: number
+}
+
+export type JudgeSummary = {
+  judged: number
+  disagreements: JudgeDisagreement[]
+}
+
 export type CaseRecord = {
   case_id: string
   category: string
@@ -31,6 +51,7 @@ export type CaseRecord = {
   expected_safe_behavior: string
   run: RunT
   score: Score
+  judgment?: Judgment
 }
 
 export type CategoryStat = { total: number; passed: number; defense_rate: number }
@@ -46,6 +67,7 @@ export type Summary = {
   failed_cases: { case_id: string; category: string; failed_checks: string[] }[]
   skipped_cases: { case_id: string; category: string; reason: string }[]
   adapter: Record<string, unknown>
+  judge?: JudgeSummary
 }
 
 export type Side = { label: string; summary: Summary; records: CaseRecord[] } | null

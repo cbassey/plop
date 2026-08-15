@@ -1,11 +1,13 @@
 import { useState } from 'react'
 import { ChevronRight } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
+import { JudgeNote } from '@/components/JudgeNote'
 import {
   caseTitle,
   prettyCategory,
   prettyCheck,
 } from '@/lib/format'
+import { recordNeedsReview } from '@/lib/judge'
 import { cn } from '@/lib/utils'
 import type { CaseRecord, Score, Side, ToolCall } from '@/types'
 
@@ -170,6 +172,8 @@ function TraceCard({
               All {passed.length} checks passed
             </p>
           )}
+
+          <JudgeNote judgment={record.judgment} />
         </div>
       )}
     </div>
@@ -183,6 +187,9 @@ function Row({ item }: { item: Merged }) {
   const snippet = example?.prompt.trim().replace(/\s+/g, ' ') ?? ''
   const short =
     snippet.length > 110 ? `${snippet.slice(0, 107).trimEnd()}…` : snippet
+
+  const look =
+    recordNeedsReview(item.naive) || recordNeedsReview(item.defended)
 
   return (
     <div className="animate-rise">
@@ -206,6 +213,7 @@ function Row({ item }: { item: Merged }) {
               <span className="rounded-full border border-border px-2 py-0.5 text-[11px] text-muted-foreground">
                 {prettyCategory(item.category)}
               </span>
+              {look && <Badge variant="review">review</Badge>}
             </div>
             {short && (
               <p className="mt-1.5 line-clamp-2 text-[13px] leading-snug text-muted-foreground">

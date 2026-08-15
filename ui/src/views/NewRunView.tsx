@@ -24,6 +24,7 @@ import {
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
 import { AlertCircle } from 'lucide-react'
+import { RunProgress } from '@/components/RunProgress'
 
 type Path = 'prompt' | 'demo' | 'agent'
 
@@ -780,23 +781,11 @@ export function NewRunView({
           )}
 
           {job && (job.status === 'queued' || job.status === 'running') && (
-            <div className="rounded-md border border-border bg-background/60 p-4">
-              <div className="mb-2 flex flex-wrap items-center justify-between gap-2 text-[13px] text-muted-foreground">
-                <span>
-                  {job.status === 'queued'
-                    ? 'Starting…'
-                    : `Running attacks · ${elapsedSec}s`}
-                </span>
-                <span>open → defended</span>
-              </div>
-              <p className="mb-2 text-[12px] text-muted-foreground">
-                Offline finishes in seconds. Live API walks every case and can
-                take a few minutes.
-              </p>
-              <pre className="max-h-40 overflow-auto whitespace-pre-wrap font-mono text-[11px] leading-relaxed text-muted-foreground">
-                {job.log || 'waiting…'}
-              </pre>
-            </div>
+            <RunProgress
+              log={job.log}
+              status={job.status}
+              elapsedSec={elapsedSec}
+            />
           )}
         </div>
 
