@@ -89,6 +89,8 @@ export function NewRunView({
   const mode = PATHS.find((p) => p.id === path)!.mode
   const activePath = PATHS.find((p) => p.id === path)!
   const keyConfigured = Boolean(secrets?.anthropic.configured)
+  // The hosted service keeps no key. It takes one per run and forgets it.
+  const canStoreKey = secrets?.storage !== 'none'
 
   useEffect(() => {
     void fetchSecrets()
@@ -216,7 +218,7 @@ export function NewRunView({
       const pasted = apiKey.trim()
       if (pasted) {
         body.api_key = pasted
-        body.save_api_key = saveApiKey
+        body.save_api_key = canStoreKey && saveApiKey
       }
     }
     if (mode === 'capability') {
@@ -433,11 +435,22 @@ export function NewRunView({
                               API key
                             </p>
                             <p className="mt-1 text-[12px] text-muted-foreground">
-                              Saved on this machine in{' '}
-                              <code className="text-[11px]">
-                                .secrets.json
-                              </code>
-                              . Never shown in full after save. Not committed.
+                              {canStoreKey ? (
+                                <>
+                                  Saved on this machine in{' '}
+                                  <code className="text-[11px]">
+                                    .secrets.json
+                                  </code>
+                                  . Never shown in full after save. Not
+                                  committed.
+                                </>
+                              ) : (
+                                <>
+                                  Your key, your budget. It is used for this
+                                  run and then dropped. Nothing writes it to
+                                  disk, and nothing logs it.
+                                </>
+                              )}
                             </p>
                           </div>
                           {keyConfigured && !replaceKey && (
@@ -495,17 +508,19 @@ export function NewRunView({
                                 className="h-10 bg-background font-mono text-[13px]"
                               />
                             </Field>
-                            <label className="flex cursor-pointer items-center gap-2 text-[13px] text-muted-foreground">
-                              <input
-                                type="checkbox"
-                                checked={saveApiKey}
-                                onChange={(e) =>
-                                  setSaveApiKey(e.target.checked)
-                                }
-                                className="h-3.5 w-3.5 rounded-sm border-border"
-                              />
-                              Save for future runs on this machine
-                            </label>
+                            {canStoreKey && (
+                              <label className="flex cursor-pointer items-center gap-2 text-[13px] text-muted-foreground">
+                                <input
+                                  type="checkbox"
+                                  checked={saveApiKey}
+                                  onChange={(e) =>
+                                    setSaveApiKey(e.target.checked)
+                                  }
+                                  className="h-3.5 w-3.5 rounded-sm border-border"
+                                />
+                                Save for future runs on this machine
+                              </label>
+                            )}
                             {replaceKey && (
                               <Button
                                 type="button"

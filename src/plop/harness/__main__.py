@@ -112,7 +112,16 @@ def main(argv: list[str] | None = None) -> int:
         default="claude-sonnet-5",
         help="The model id for the anthropic backend.",
     )
+    parser.add_argument(
+        "--results-dir",
+        help="The folder for the output files. It defaults to plop/results. "
+        "The hosted API gives each visitor a folder of their own.",
+    )
     args = parser.parse_args(argv)
+
+    # Only send the argument when the user gives one, so the runner keeps
+    # its own default.
+    where = {"results_dir": args.results_dir} if args.results_dir else {}
 
     adapter = None
     backend = None
@@ -133,6 +142,7 @@ def main(argv: list[str] | None = None) -> int:
             provided_capabilities=provided_capabilities,
             canaries=profile.canaries,
             tool_binding=tool_binding,
+            **where,
         )
         _emit(summary)
         return 0
@@ -170,6 +180,7 @@ def main(argv: list[str] | None = None) -> int:
         backend=backend,
         backend_factory=backend_factory,
         model=args.model,
+        **where,
     )
 
     _emit(summary)

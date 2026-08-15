@@ -5,6 +5,8 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
+    "api": "cd .. && .venv/bin/uvicorn plop_api.main:app --reload --port 8000",
+    "dev:all": "npm run api & npm run dev",
     "build": "tsc -b && vite build",
     "lint": "oxlint",
     "preview": "vite preview",
