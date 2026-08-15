@@ -21,7 +21,7 @@ const PATHS = [
   {
     title: 'Score my prompt',
     detail:
-      "Paste a system prompt. Plop runs its own agent loop and tools. This tests the prompt and model — not your product's real tools. Offline by default; live scoring needs your own Anthropic API key.",
+      "Paste a system prompt. Plop runs its own agent loop and tools. This tests the prompt and model — not your product's real tools. Offline by default; live scoring needs your own API key.",
   },
   {
     title: 'Score a live agent',
@@ -76,7 +76,6 @@ export function HomeView({
   return (
     <div className="space-y-12">
       <div className="max-w-2xl">
-        <p className="mb-2 text-xs font-medium text-muted-foreground">Plop</p>
         <h1 className="font-display text-3xl font-semibold tracking-tight text-foreground sm:text-5xl">
           Attack your agent on purpose.
         </h1>
