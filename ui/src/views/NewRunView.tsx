@@ -380,7 +380,6 @@ export function NewRunView({
                   required
                   placeholder="Paste the system prompt your product uses…"
                   className="min-h-[180px] bg-background font-mono text-[13px] leading-relaxed"
-                  autoFocus
                 />
               </Field>
               <Button
