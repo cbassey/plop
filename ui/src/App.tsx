@@ -5,10 +5,12 @@ import { BrandLockup, PlopMark } from '@cbassey/ui-kit/brand'
 import { RunsView } from '@/views/RunsView'
 import { NewRunView } from '@/views/NewRunView'
 import { StudyView } from '@/views/StudyView'
+import { HomeView } from '@/views/HomeView'
 import { fetchResults } from '@/lib/api'
 import type { Study } from '@/types'
 
 type Route =
+  | { name: 'home' }
   | { name: 'runs' }
   | { name: 'new' }
   | { name: 'study'; study: string }
@@ -48,7 +50,16 @@ export default function App() {
 
   return (
     <Shell
-      brand={<BrandLockup mark={PlopMark} name="plop" />}
+      brand={
+        <button
+          type="button"
+          onClick={() => setRoute({ name: 'home' })}
+          className="text-inherit transition-opacity hover:opacity-70"
+          aria-label="Plop home"
+        >
+          <BrandLockup mark={PlopMark} name="Plop" />
+        </button>
+      }
       nav={
         <NavLink
           active={route.name === 'runs' || route.name === 'study'}
@@ -60,7 +71,7 @@ export default function App() {
       action={
         route.name !== 'new' ? (
           <PrimaryButton onClick={() => setRoute({ name: 'new' })}>
-            Score my prompt
+            New run
           </PrimaryButton>
         ) : undefined
       }
@@ -90,6 +101,11 @@ export default function App() {
         <div className="py-20 text-center text-[14px] text-muted-foreground">
           Loading studies…
         </div>
+      ) : route.name === 'home' ? (
+        <HomeView
+          onNew={() => setRoute({ name: 'new' })}
+          onSeeRuns={() => setRoute({ name: 'runs' })}
+        />
       ) : route.name === 'new' ? (
         <NewRunView
           onCancel={() => setRoute({ name: 'runs' })}

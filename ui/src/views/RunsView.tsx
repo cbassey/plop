@@ -78,7 +78,7 @@ export function RunsView({
             how results look.
           </p>
           <div className="mt-8 flex flex-wrap justify-center gap-3">
-            <PrimaryButton onClick={onNew}>Score my prompt</PrimaryButton>
+            <PrimaryButton onClick={onNew}>New run</PrimaryButton>
           </div>
         </div>
       ) : (
@@ -115,14 +115,14 @@ export function RunsView({
                     <button
                       type="button"
                       onClick={() => onOpen(s.name)}
-                      className="w-[4.75rem] text-right font-display text-lg tabular text-foreground"
+                      className="w-[4.75rem] text-right font-display text-sm tabular text-foreground"
                     >
                       {off ? `${pct(off.defense_rate)}%` : '—'}
                     </button>
                     <button
                       type="button"
                       onClick={() => onOpen(s.name)}
-                      className="w-[4.75rem] text-right font-display text-lg tabular text-foreground"
+                      className="w-[4.75rem] text-right font-display text-sm tabular text-foreground"
                     >
                       {on ? `${pct(on.defense_rate)}%` : '—'}
                     </button>
