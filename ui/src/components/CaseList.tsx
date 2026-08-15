@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { ChevronRight } from 'lucide-react'
-import { Badge } from '@/components/ui/badge'
+import { Badge } from '@cbassey/ui-kit'
 import { JudgeNote } from '@/components/JudgeNote'
 import {
   caseTitle,
@@ -19,10 +19,10 @@ type Merged = {
 }
 
 function statusBadge(score: Score | undefined) {
-  if (!score) return <Badge variant="skip">—</Badge>
-  if (score.skipped) return <Badge variant="skip">skipped</Badge>
-  if (score.passed) return <Badge variant="pass">held</Badge>
-  return <Badge variant="fail">broke</Badge>
+  if (!score) return <Badge variant="neutral">—</Badge>
+  if (score.skipped) return <Badge variant="neutral">skipped</Badge>
+  if (score.passed) return <Badge variant="success">held</Badge>
+  return <Badge variant="error">broke</Badge>
 }
 
 function statusWord(score: Score | undefined): string {
@@ -213,7 +213,7 @@ function Row({ item }: { item: Merged }) {
               <span className="rounded-full border border-border px-2 py-0.5 text-[11px] text-muted-foreground">
                 {prettyCategory(item.category)}
               </span>
-              {look && <Badge variant="review">review</Badge>}
+              {look && <Badge variant="outline">review</Badge>}
             </div>
             {short && (
               <p className="mt-1.5 line-clamp-2 text-[13px] leading-snug text-muted-foreground">

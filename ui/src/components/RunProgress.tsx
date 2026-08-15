@@ -7,7 +7,7 @@ import {
   X,
 } from 'lucide-react'
 import { Marker, MarkerContent, MarkerIcon } from '@/components/ui/marker'
-import { Badge } from '@/components/ui/badge'
+import { Badge } from '@cbassey/ui-kit'
 import { caseTitle } from '@/lib/format'
 import { verdictLabel } from '@/lib/judge'
 import {
@@ -38,9 +38,7 @@ function MarkIcon({ row }: { row: StreamRow }) {
 function MarkMeta({ row }: { row: StreamRow }) {
   if (row.mark === 'running') {
     return (
-      <span className="font-mono text-[10px] uppercase tracking-[0.14em] text-muted-foreground">
-        Now
-      </span>
+      <span className="text-xs font-medium text-muted-foreground">Now</span>
     )
   }
   if (row.kind === 'review') {
@@ -57,10 +55,10 @@ function MarkMeta({ row }: { row: StreamRow }) {
       </span>
     )
   }
-  if (row.mark === 'held') return <Badge variant="pass">held</Badge>
-  if (row.mark === 'broke') return <Badge variant="fail">broke</Badge>
-  if (row.mark === 'skip') return <Badge variant="skip">skipped</Badge>
-  return <Badge variant="skip">{row.mark}</Badge>
+  if (row.mark === 'held') return <Badge variant="success">held</Badge>
+  if (row.mark === 'broke') return <Badge variant="error">broke</Badge>
+  if (row.mark === 'skip') return <Badge variant="neutral">skipped</Badge>
+  return <Badge variant="neutral">{row.mark}</Badge>
 }
 
 function PhaseBlock({
@@ -74,11 +72,11 @@ function PhaseBlock({
   return (
     <section>
       <div className="mb-1 flex items-baseline justify-between gap-3">
-        <h3 className="text-[12px] font-medium uppercase tracking-[0.14em] text-muted-foreground">
+        <h3 className="text-xs font-medium text-muted-foreground">
           {phase.title}
         </h3>
         {total > 0 && (
-          <span className="tabular font-mono text-[11px] text-muted-foreground">
+          <span className="tabular text-[11px] text-muted-foreground">
             {done}/{total}
           </span>
         )}

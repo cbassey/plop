@@ -3,12 +3,13 @@ import { Trash2, ChevronRight } from 'lucide-react'
 import { pct } from '@/lib/format'
 import { adapterLabel, deleteStudy } from '@/lib/api'
 import type { Study } from '@/types'
-import { PageHeader, PrimaryButton } from '@/components/Shell'
-import { Glossary } from '@/components/Glossary'
-import { WhatIsPlop } from '@/components/WhatIsPlop'
-import { Button } from '@/components/ui/button'
-import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
 import {
+  PageHeader,
+  PrimaryButton,
+  Button,
+  Alert,
+  AlertDescription,
+  AlertTitle,
   AlertDialog,
   AlertDialogAction,
   AlertDialogCancel,
@@ -18,7 +19,9 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
   AlertDialogTrigger,
-} from '@/components/ui/alert-dialog'
+} from '@cbassey/ui-kit'
+import { Glossary } from '@/components/Glossary'
+import { WhatIsPlop } from '@/components/WhatIsPlop'
 import { AlertCircle } from 'lucide-react'
 
 export function RunsView({

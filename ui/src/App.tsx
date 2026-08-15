@@ -1,13 +1,12 @@
 import { useCallback, useEffect, useState } from 'react'
 import { AlertCircle } from 'lucide-react'
-import { Shell, NavLink, PrimaryButton } from '@/components/Shell'
+import { Shell, NavLink, PrimaryButton, Alert, AlertDescription, AlertTitle, Button } from '@cbassey/ui-kit'
+import { BrandLockup, PlopMark } from '@cbassey/ui-kit/brand'
 import { RunsView } from '@/views/RunsView'
 import { NewRunView } from '@/views/NewRunView'
 import { StudyView } from '@/views/StudyView'
 import { fetchResults } from '@/lib/api'
 import type { Study } from '@/types'
-import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
-import { Button } from '@/components/ui/button'
 
 type Route =
   | { name: 'runs' }
@@ -49,6 +48,7 @@ export default function App() {
 
   return (
     <Shell
+      brand={<BrandLockup mark={PlopMark} name="plop" />}
       nav={
         <NavLink
           active={route.name === 'runs' || route.name === 'study'}
