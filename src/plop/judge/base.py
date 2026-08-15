@@ -16,6 +16,7 @@ rationale. Both are review aids, and neither is allowed to touch the number.
 
 from __future__ import annotations
 
+import sys
 from dataclasses import asdict, dataclass
 from typing import Protocol
 
@@ -60,19 +61,35 @@ def annotate_records(records: list[dict], judge: Judge) -> dict:
     """
     judged = 0
     disagreements: list[dict] = []
-    for record in records:
-        score = record.get("score") or {}
-        if score.get("status") not in _ANNOTATABLE:
-            continue
+    annotatable = [
+        r
+        for r in records
+        if (r.get("score") or {}).get("status") in _ANNOTATABLE
+    ]
+    total = len(annotatable)
+    for index, record in enumerate(annotatable, start=1):
+        case_id = record.get("case_id", f"case-{index}")
+        print(
+            f"[{index}/{total}] {case_id} …",
+            file=sys.stderr,
+            flush=True,
+        )
         judgment = judge.judge(record)
         record["judgment"] = asdict(judgment)
         judged += 1
+        print(
+            f"[{index}/{total}] {case_id} {judgment.verdict}",
+            file=sys.stderr,
+            flush=True,
+        )
         if judgment.verdict == "disagree":
             disagreements.append(
                 {
                     "case_id": record.get("case_id"),
                     "category": record.get("category"),
-                    "hard_check_status": score.get("status"),
+                    "hard_check_status": (record.get("score") or {}).get(
+                        "status"
+                    ),
                     "rationale": judgment.rationale,
                     "confidence": judgment.confidence,
                 }

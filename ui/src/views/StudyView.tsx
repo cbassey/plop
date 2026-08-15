@@ -1,17 +1,13 @@
 import { useState } from 'react'
 import { Trash2, AlertCircle } from 'lucide-react'
-import { Meter } from '@/components/Meter'
-import { CategoryBreakdown } from '@/components/CategoryBreakdown'
-import { CaseList } from '@/components/CaseList'
-import { Glossary } from '@/components/Glossary'
-import { PageHeader } from '@/components/Shell'
-import { adapterLabel, deleteStudy } from '@/lib/api'
-import { pct } from '@/lib/format'
-import type { Study } from '@/types'
-import { cn } from '@/lib/utils'
-import { Button } from '@/components/ui/button'
-import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
 import {
+  Meter,
+  CategoryBreakdown,
+  PageHeader,
+  Button,
+  Alert,
+  AlertDescription,
+  AlertTitle,
   AlertDialog,
   AlertDialogAction,
   AlertDialogCancel,
@@ -21,12 +17,17 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
   AlertDialogTrigger,
-} from '@/components/ui/alert-dialog'
-import {
   Tabs,
   TabsList,
   TabsTrigger,
-} from '@/components/ui/tabs'
+} from '@cbassey/ui-kit'
+import { CaseList } from '@/components/CaseList'
+import { Glossary } from '@/components/Glossary'
+import { ReviewerPanel } from '@/components/ReviewerPanel'
+import { adapterLabel, deleteStudy } from '@/lib/api'
+import { pct, prettyCategory } from '@/lib/format'
+import type { Study } from '@/types'
+import { cn } from '@/lib/utils'
 
 type Pane = 'overview' | 'classes' | 'cases'
 
@@ -152,11 +153,27 @@ export function StudyView({
               )}
             </p>
             <Meter
-              name={study.name}
-              adapter={adapterLabel(study)}
-              naive={naive}
-              defended={defended}
+              left={
+                naive && {
+                  label: 'Without defenses',
+                  rate: naive.defense_rate,
+                  detail: `${naive.passed}/${naive.total} held${naive.skipped > 0 ? ` · ${naive.skipped} skipped` : ''}`,
+                }
+              }
+              right={
+                defended && {
+                  label: 'With defenses',
+                  rate: defended.defense_rate,
+                  detail: `${defended.passed}/${defended.total} held${defended.skipped > 0 ? ` · ${defended.skipped} skipped` : ''}`,
+                }
+              }
+              leftEmptyLabel="Without defenses"
+              rightEmptyLabel="With defenses"
               compact
+            />
+            <ReviewerPanel
+              study={study}
+              onSeeAttacks={() => setPane('cases')}
             />
             <footer className="border-t border-border pt-5 text-[13px] text-muted-foreground">
               {(defended ?? naive)?.total ?? 0} attacks ·{' '}
@@ -177,7 +194,22 @@ export function StudyView({
             <p className="mb-4 max-w-xl text-[14px] leading-relaxed text-muted-foreground">
               Defense rate by kind of attack.
             </p>
-            <CategoryBreakdown naive={naive} defended={defended} />
+            <CategoryBreakdown
+              rows={[
+                ...new Set([
+                  ...Object.keys(naive?.per_category ?? {}),
+                  ...Object.keys(defended?.per_category ?? {}),
+                ]),
+              ]
+                .sort()
+                .map((cat) => ({
+                  label: prettyCategory(cat),
+                  left: naive?.per_category[cat],
+                  right: defended?.per_category[cat],
+                }))}
+              columnLabel="By attack type"
+              legend={{ left: 'without', right: 'with defenses' }}
+            />
           </div>
         )}
 
@@ -185,7 +217,7 @@ export function StudyView({
           <div>
             <p className="mb-4 max-w-xl text-[14px] leading-relaxed text-muted-foreground">
               Open a row for the full trace — what we asked, what safe looks
-              like, and open vs defended.
+              like, open vs defended, and the reviewer note when one ran.
             </p>
             <CaseList naive={study.naive} defended={study.defended} />
           </div>
