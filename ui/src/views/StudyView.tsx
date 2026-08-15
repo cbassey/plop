@@ -64,7 +64,6 @@ export function StudyView({
   return (
     <div>
       <PageHeader
-        eyebrow="Results"
         title={study.name}
         description={adapterLabel(study)}
         action={

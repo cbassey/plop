@@ -51,7 +51,6 @@ export function RunsView({
   return (
     <div>
       <PageHeader
-        eyebrow="Team"
         title="Runs"
         description="Defense rates for tool-using agents. Each run is the same attack suite — open, then defended."
       />

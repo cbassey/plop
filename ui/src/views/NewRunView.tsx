@@ -300,7 +300,6 @@ export function NewRunView({
   return (
     <div>
       <PageHeader
-        eyebrow="For the team"
         title="New run"
         description="Pick a path. Same attack suite — open, then defended."
         action={
